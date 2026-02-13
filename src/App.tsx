@@ -1,20 +1,21 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
+import { Camera, Monitor } from 'lucide-react';
 import VoiceOrb, { OrbState } from './components/VoiceOrb';
-import ModeSelector from './components/ModeSelector';
-import ModeSetup from './components/ModeSetup';
-import { Mode } from './data/modes';
+import CameraView from './components/CameraView';
+import ScreenShare from './components/ScreenShare';
+import ImageDisplay from './components/ImageDisplay';
 
-const BASE_SYSTEM_INSTRUCTION = `You are Muffin, Tom's friendly AI assistant. You have a warm, conversational personality. Talk naturally like a friend. Keep responses concise and conversational — this is a voice chat, not an essay. Be helpful, have opinions, and be genuinely engaging.`;
+const SYSTEM_INSTRUCTION = `You are Muffin, Tom's friendly AI assistant. You have a warm, conversational personality. Talk naturally like a friend. Keep responses concise and conversational — this is a voice chat, not an essay. Be helpful, have opinions, and be genuinely engaging.`;
 
 const App: React.FC = () => {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [statusText, setStatusText] = useState('Tap to start');
   const [error, setError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
-  const [selectedMode, setSelectedMode] = useState<Mode | null>(null);
-  const [showSetup, setShowSetup] = useState<Mode | null>(null);
-  const [activeMode, setActiveMode] = useState<{ mode: Mode; config?: string } | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [screenActive, setScreenActive] = useState(false);
+  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
 
   const sessionRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -26,8 +27,22 @@ const App: React.FC = () => {
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const connectedRef = useRef(false);
 
+  const isActive = orbState !== 'idle';
+  const hasMediaPreview = cameraActive || screenActive;
+
   useEffect(() => {
     return () => { disconnect(); };
+  }, []);
+
+  const sendImageFrame = useCallback((base64: string) => {
+    if (!connectedRef.current || !sessionRef.current) return;
+    try {
+      sessionRef.current.sendRealtimeInput({
+        media: { data: base64, mimeType: 'image/jpeg' },
+      });
+    } catch (err) {
+      console.error('Failed to send image frame:', err);
+    }
   }, []);
 
   const connect = useCallback(async () => {
@@ -56,7 +71,6 @@ const App: React.FC = () => {
           setOrbState('listening');
           setStatusText('Listening...');
 
-          // Set up mic input
           if (inputCtxRef.current) {
             const source = inputCtxRef.current.createMediaStreamSource(stream);
             sourceNodeRef.current = source;
@@ -77,8 +91,19 @@ const App: React.FC = () => {
           }
         },
         onmessage: (message: any) => {
-          const audioData = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-          if (audioData && outputCtxRef.current) {
+          // Check for image content from Gemini
+          const parts = message.serverContent?.modelTurn?.parts;
+          if (parts) {
+            for (const part of parts) {
+              if (part.inlineData?.mimeType?.startsWith('image/')) {
+                setGeneratedImages(prev => [...prev, part.inlineData.data]);
+              }
+            }
+          }
+
+          const audioData = parts?.[0]?.inlineData?.data;
+          const mimeType = parts?.[0]?.inlineData?.mimeType;
+          if (audioData && mimeType?.startsWith('audio/') && outputCtxRef.current) {
             setOrbState('speaking');
             setStatusText('Muffin is speaking...');
 
@@ -105,7 +130,6 @@ const App: React.FC = () => {
             nextStartTimeRef.current += buffer.duration;
             sourcesRef.current.add(src);
 
-            // Estimate audio level from PCM data
             const int16 = new Int16Array(raw.buffer);
             let sum = 0;
             for (let i = 0; i < int16.length; i++) sum += Math.abs(int16[i]);
@@ -113,7 +137,6 @@ const App: React.FC = () => {
             setAudioLevel(Math.min(1, avg * 4));
           }
 
-          // Handle turn complete
           if (message.serverContent?.turnComplete) {
             if (connectedRef.current) {
               setOrbState('listening');
@@ -143,7 +166,7 @@ const App: React.FC = () => {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
           },
-          systemInstruction: buildSystemPrompt(),
+          systemInstruction: SYSTEM_INSTRUCTION,
         },
         callbacks,
       });
@@ -161,24 +184,21 @@ const App: React.FC = () => {
 
   const disconnect = useCallback(() => {
     connectedRef.current = false;
+    setCameraActive(false);
+    setScreenActive(false);
 
-    // Stop audio sources
     sourcesRef.current.forEach((s) => { try { s.stop(); } catch {} });
     sourcesRef.current.clear();
 
-    // Disconnect audio nodes
     scriptProcessorRef.current?.disconnect();
     sourceNodeRef.current?.disconnect();
 
-    // Close session
     try { sessionRef.current?.close(); } catch {}
     sessionRef.current = null;
 
-    // Stop mic
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
 
-    // Close audio contexts
     try { inputCtxRef.current?.close(); } catch {}
     try { outputCtxRef.current?.close(); } catch {}
     inputCtxRef.current = null;
@@ -190,74 +210,87 @@ const App: React.FC = () => {
     setAudioLevel(0);
   }, []);
 
-  const handleModeSelect = (mode: Mode | null) => {
-    if (!mode) {
-      setSelectedMode(null);
-      setActiveMode(null);
-      return;
-    }
-    if (mode.settings?.requiresLanguage || mode.settings?.requiresRole) {
-      setShowSetup(mode);
-    } else {
-      setSelectedMode(mode);
-      setActiveMode({ mode });
-    }
-  };
-
-  const handleSetupConfirm = (value: string) => {
-    if (showSetup) {
-      setSelectedMode(showSetup);
-      setActiveMode({ mode: showSetup, config: value });
-      setShowSetup(null);
-    }
-  };
-
-  const buildSystemPrompt = (): string => {
-    if (!activeMode) return BASE_SYSTEM_INSTRUCTION;
-    let modePrompt = activeMode.mode.systemPromptOverride;
-    if (activeMode.config) {
-      modePrompt = modePrompt.replace(/\[language\]/gi, activeMode.config).replace(/\[role\]/gi, activeMode.config);
-    }
-    return `${BASE_SYSTEM_INSTRUCTION}\n\nAdditional mode: ${modePrompt}`;
-  };
-
   const handleToggle = () => {
     if (orbState === 'idle') connect();
     else disconnect();
   };
 
+  const canScreenShare = typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+
   return (
     <div style={styles.page}>
       <h1 style={styles.title}>Muffin Voice</h1>
 
-      <div style={styles.orbWrapper}>
+      <div style={{
+        ...styles.orbWrapper,
+        ...(hasMediaPreview ? { transform: 'scale(0.85) translateY(-20px)' } : {}),
+        transition: 'transform 0.4s ease',
+      }}>
         <VoiceOrb state={orbState} audioLevel={audioLevel} />
-        {activeMode && orbState !== 'idle' && (
-          <div style={{ ...styles.modeIndicator, color: activeMode.mode.color, borderColor: activeMode.mode.color + '40' }}>
-            <span>{activeMode.mode.icon}</span>
-            <span>{activeMode.mode.name}{activeMode.config ? ` · ${activeMode.config}` : ''}</span>
-          </div>
-        )}
       </div>
+
+      {/* Media previews */}
+      {hasMediaPreview && (
+        <div style={styles.previewRow}>
+          <CameraView
+            active={cameraActive}
+            onFrame={sendImageFrame}
+            onClose={() => setCameraActive(false)}
+          />
+          <ScreenShare
+            active={screenActive}
+            onFrame={sendImageFrame}
+            onClose={() => setScreenActive(false)}
+          />
+        </div>
+      )}
 
       <p style={styles.status}>{statusText}</p>
 
       {error && <p style={styles.error}>{error}</p>}
 
-      {orbState === 'idle' && (
-        <ModeSelector selectedMode={selectedMode} onSelect={handleModeSelect} disabled={orbState !== 'idle'} />
+      <div style={styles.buttonRow}>
+        <button onClick={handleToggle} style={{
+          ...styles.button,
+          ...(isActive ? styles.buttonActive : {}),
+        }}>
+          {orbState === 'idle' ? 'Start Conversation' : 'End Conversation'}
+        </button>
+      </div>
+
+      {/* Floating action buttons for multimodal */}
+      {isActive && (
+        <div style={styles.fabRow}>
+          <button
+            onClick={() => setCameraActive(prev => !prev)}
+            style={{
+              ...styles.fab,
+              ...(cameraActive ? styles.fabActive : {}),
+            }}
+            title="Toggle camera"
+          >
+            <Camera size={20} />
+          </button>
+          {canScreenShare && (
+            <button
+              onClick={() => setScreenActive(prev => !prev)}
+              style={{
+                ...styles.fab,
+                ...(screenActive ? styles.fabActive : {}),
+              }}
+              title="Share screen"
+            >
+              <Monitor size={20} />
+            </button>
+          )}
+        </div>
       )}
 
-      <button onClick={handleToggle} style={{
-        ...styles.button,
-        ...(orbState !== 'idle' ? styles.buttonActive : {}),
-      }}>
-        {orbState === 'idle' ? 'Start Conversation' : 'End Conversation'}
-      </button>
-
-      {showSetup && (
-        <ModeSetup mode={showSetup} onConfirm={handleSetupConfirm} onCancel={() => setShowSetup(null)} />
-      )}
+      {/* Image display overlay */}
+      <ImageDisplay
+        images={generatedImages}
+        onDismiss={() => setGeneratedImages([])}
+      />
     </div>
   );
 };
@@ -303,7 +336,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 32,
+    gap: 24,
     padding: 24,
     background: 'linear-gradient(180deg, #0a0a0f 0%, #0f0f1a 100%)',
   },
@@ -316,22 +349,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
   orbWrapper: {
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
   },
-  modeIndicator: {
+  previewRow: {
     display: 'flex',
+    gap: 12,
     alignItems: 'center',
-    gap: 6,
-    fontSize: 13,
-    fontWeight: 500,
-    padding: '6px 14px',
-    borderRadius: 20,
-    border: '1px solid',
-    background: 'rgba(0,0,0,0.3)',
-    letterSpacing: 0.5,
+    justifyContent: 'center',
+    flexWrap: 'wrap',
   },
   status: {
     fontSize: 16,
@@ -346,6 +372,10 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     maxWidth: 400,
     textAlign: 'center' as const,
+  },
+  buttonRow: {
+    display: 'flex',
+    gap: 12,
   },
   button: {
     padding: '14px 36px',
@@ -363,6 +393,36 @@ const styles: Record<string, React.CSSProperties> = {
     borderColor: 'rgba(248, 113, 113, 0.4)',
     background: 'rgba(248, 113, 113, 0.1)',
     color: '#f87171',
+  },
+  fabRow: {
+    display: 'flex',
+    gap: 12,
+    position: 'fixed' as const,
+    bottom: 32,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 50,
+  },
+  fab: {
+    width: 48,
+    height: 48,
+    borderRadius: '50%',
+    border: '1px solid rgba(255,255,255,0.15)',
+    background: 'rgba(255,255,255,0.08)',
+    color: 'rgba(255,255,255,0.7)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.3s ease',
+    padding: 0,
+    backdropFilter: 'blur(10px)',
+  },
+  fabActive: {
+    borderColor: 'rgba(96, 165, 250, 0.5)',
+    background: 'rgba(96, 165, 250, 0.2)',
+    color: '#60a5fa',
+    boxShadow: '0 0 20px rgba(96, 165, 250, 0.3)',
   },
 };
 
