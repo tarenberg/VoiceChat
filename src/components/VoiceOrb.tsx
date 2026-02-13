@@ -5,12 +5,13 @@ export type OrbState = 'idle' | 'connecting' | 'listening' | 'speaking';
 interface Props {
   state: OrbState;
   audioLevel?: number; // 0-1
+  color?: string; // persona accent color
 }
 
 const SIZE = 240;
 const PARTICLE_COUNT = 18;
 
-const VoiceOrb: React.FC<Props> = ({ state, audioLevel = 0 }) => {
+const VoiceOrb: React.FC<Props> = ({ state, audioLevel = 0, color }) => {
   const scale = state === 'speaking' ? 1 + audioLevel * 0.3 : 1;
 
   // Generate stable particle positions
