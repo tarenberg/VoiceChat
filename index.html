@@ -11,6 +11,12 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      window.addEventListener('error', function(e) {
+        document.body.style.background = '#1a0000';
+        document.body.innerHTML = '<pre style="color:#f87171;padding:40px;font-size:14px;white-space:pre-wrap">LOAD ERROR:\n' + e.message + '\n\nFile: ' + e.filename + '\nLine: ' + e.lineno + '</pre>';
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
