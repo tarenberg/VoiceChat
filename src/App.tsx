@@ -1,21 +1,33 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import VoiceOrb, { OrbState } from './components/VoiceOrb';
-import AmbientSound from './components/AmbientSound';
-import AudioSettings from './components/AudioSettings';
+import ModeSelector from './components/ModeSelector';
+import ModeSetup from './components/ModeSetup';
+import UsageMeter from './components/UsageMeter';
+import CreditsDisplay from './components/CreditsDisplay';
+import ShareDialog from './components/ShareDialog';
+import UpgradePrompt from './components/UpgradePrompt';
+import TemplateShare from './components/TemplateShare';
+import { addMinutes, isLimitReached } from './services/usageTracker';
+import { Persona } from './types';
+import { Mode } from './data/modes';
 
-const SYSTEM_INSTRUCTION = `You are Muffin, Tom's friendly AI assistant. You have a warm, conversational personality. Talk naturally like a friend. Keep responses concise and conversational — this is a voice chat, not an essay. Be helpful, have opinions, and be genuinely engaging.`;
+const BASE_SYSTEM_INSTRUCTION = `You are Muffin, Tom's friendly AI assistant. You have a warm, conversational personality. Talk naturally like a friend. Keep responses concise and conversational — this is a voice chat, not an essay. Be helpful, have opinions, and be genuinely engaging.`;
 
 const App: React.FC = () => {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [statusText, setStatusText] = useState('Tap to start');
   const [error, setError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
-  const [ambientOpen, setAmbientOpen] = useState(false);
-  const [showAudioSettings, setShowAudioSettings] = useState(false);
-  const [inputDevice, setInputDevice] = useState('');
-  const [outputDevice, setOutputDevice] = useState('');
-  const [handsFree, setHandsFree] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<Mode | null>(null);
+  const [showSetup, setShowSetup] = useState<Mode | null>(null);
+  const [activeMode, setActiveMode] = useState<{ mode: Mode; config?: string } | null>(null);
+  const [usageRefresh, setUsageRefresh] = useState(0);
+  const [showCredits, setShowCredits] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [showTemplateShare, setShowTemplateShare] = useState(false);
+  const [lastSessionMinutes, setLastSessionMinutes] = useState(0);
 
   const sessionRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -26,21 +38,48 @@ const App: React.FC = () => {
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const connectedRef = useRef(false);
-  const handsFreeRef = useRef(false);
-
-  // Keep ref in sync
-  useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
+  const sessionStartRef = useRef<number>(0);
+  const usageIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     return () => { disconnect(); };
   }, []);
 
-  // Haptic helper
-  const haptic = useCallback((pattern: number | number[]) => {
-    try { navigator.vibrate?.(pattern); } catch {}
-  }, []);
+  const startUsageTracking = () => {
+    sessionStartRef.current = Date.now();
+    // Track usage every 15 seconds
+    usageIntervalRef.current = setInterval(() => {
+      addMinutes(0.25); // 15s = 0.25 min
+      setUsageRefresh((r) => r + 1);
+      if (isLimitReached()) {
+        // Don't force disconnect, just update UI
+        setUsageRefresh((r) => r + 1);
+      }
+    }, 15000);
+  };
+
+  const stopUsageTracking = () => {
+    if (usageIntervalRef.current) {
+      clearInterval(usageIntervalRef.current);
+      usageIntervalRef.current = null;
+    }
+    if (sessionStartRef.current) {
+      const elapsed = (Date.now() - sessionStartRef.current) / 60000;
+      // Add any remaining fractional time not yet tracked
+      const remainder = elapsed % 0.25;
+      if (remainder > 0.01) addMinutes(remainder);
+      setLastSessionMinutes(elapsed);
+      sessionStartRef.current = 0;
+      setUsageRefresh((r) => r + 1);
+    }
+  };
 
   const connect = useCallback(async () => {
+    if (isLimitReached()) {
+      setShowUpgrade(true);
+      return;
+    }
+
     const apiKey = import.meta.env.VITE_API_KEY;
     if (!apiKey) {
       setError('API key missing. Create .env.local with VITE_API_KEY=your_key');
@@ -57,10 +96,7 @@ const App: React.FC = () => {
       inputCtxRef.current = new AudioContext({ sampleRate: 16000 });
       outputCtxRef.current = new AudioContext({ sampleRate: 24000 });
 
-      const constraints: MediaStreamConstraints = {
-        audio: inputDevice ? { deviceId: { exact: inputDevice } } : true,
-      };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
       const callbacks = {
@@ -68,8 +104,7 @@ const App: React.FC = () => {
           connectedRef.current = true;
           setOrbState('listening');
           setStatusText('Listening...');
-          // Haptic: connected
-          haptic([100, 50, 100]);
+          startUsageTracking();
 
           // Set up mic input
           if (inputCtxRef.current) {
@@ -96,8 +131,6 @@ const App: React.FC = () => {
           if (audioData && outputCtxRef.current) {
             setOrbState('speaking');
             setStatusText('Muffin is speaking...');
-            // Haptic: AI speaking
-            haptic(50);
 
             const ctx = outputCtxRef.current;
             nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
@@ -141,24 +174,16 @@ const App: React.FC = () => {
         },
         onclose: () => {
           connectedRef.current = false;
-          if (handsFreeRef.current) {
-            // Auto-reconnect in hands-free mode
-            setOrbState('connecting');
-            setStatusText('Reconnecting...');
-            setTimeout(() => connect(), 1000);
-            return;
-          }
+          stopUsageTracking();
           setOrbState('idle');
           setStatusText('Disconnected');
+          setShowShare(true);
         },
         onerror: (e: any) => {
           console.error('Session error', e);
           setError('Connection lost. Try again.');
           connectedRef.current = false;
-          if (handsFreeRef.current) {
-            setTimeout(() => connect(), 2000);
-            return;
-          }
+          stopUsageTracking();
           setOrbState('idle');
           setStatusText('Tap to start');
         },
@@ -171,7 +196,7 @@ const App: React.FC = () => {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
           },
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: buildSystemPrompt(),
         },
         callbacks,
       });
@@ -185,12 +210,11 @@ const App: React.FC = () => {
       setOrbState('idle');
       setStatusText('Tap to start');
     }
-  }, [inputDevice, haptic]);
+  }, []);
 
   const disconnect = useCallback(() => {
     connectedRef.current = false;
-    handsFreeRef.current = false;
-    setHandsFree(false);
+    stopUsageTracking();
 
     // Stop audio sources
     sourcesRef.current.forEach((s) => { try { s.stop(); } catch {} });
@@ -218,90 +242,104 @@ const App: React.FC = () => {
     setOrbState('idle');
     setStatusText('Tap to start');
     setAudioLevel(0);
+
+    if (sessionStartRef.current) {
+      setShowShare(true);
+    }
   }, []);
+
+  const handleModeSelect = (mode: Mode | null) => {
+    if (!mode) {
+      setSelectedMode(null);
+      setActiveMode(null);
+      return;
+    }
+    if (mode.settings?.requiresLanguage || mode.settings?.requiresRole) {
+      setShowSetup(mode);
+    } else {
+      setSelectedMode(mode);
+      setActiveMode({ mode });
+    }
+  };
+
+  const handleSetupConfirm = (value: string) => {
+    if (showSetup) {
+      setSelectedMode(showSetup);
+      setActiveMode({ mode: showSetup, config: value });
+      setShowSetup(null);
+    }
+  };
+
+  const buildSystemPrompt = (): string => {
+    if (!activeMode) return BASE_SYSTEM_INSTRUCTION;
+    let modePrompt = activeMode.mode.systemPromptOverride;
+    if (activeMode.config) {
+      modePrompt = modePrompt.replace(/\[language\]/gi, activeMode.config).replace(/\[role\]/gi, activeMode.config);
+    }
+    return `${BASE_SYSTEM_INSTRUCTION}\n\nAdditional mode: ${modePrompt}`;
+  };
 
   const handleToggle = () => {
     if (orbState === 'idle') connect();
     else disconnect();
   };
 
-  // Tap-anywhere-to-talk when idle
-  const handlePageTap = (e: React.MouseEvent) => {
-    // Don't trigger if clicking a button or control
-    const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('input') || target.closest('select') || target.closest('[data-no-tap]')) return;
-    if (orbState === 'idle') connect();
+  const handleImportPersona = (persona: Omit<Persona, 'id'>) => {
+    // For now just log — full integration would add to profile.customPersonas
+    console.log('Imported persona:', persona);
+    alert(`Imported persona: ${persona.name}`);
   };
 
   return (
-    <div style={styles.page} onClick={handlePageTap}>
-      <h1 style={styles.title}>Muffin Voice</h1>
-
-      {/* Top-right controls */}
-      <div style={styles.topControls}>
-        <button
-          onClick={() => setAmbientOpen(true)}
-          style={styles.iconBtn}
-          title="Ambient Sounds"
-        >
-          🎵
-        </button>
-        <button
-          onClick={() => setShowAudioSettings(!showAudioSettings)}
-          style={styles.iconBtn}
-          title="Audio Settings"
-        >
-          🎧
-        </button>
+    <div style={styles.page}>
+      {/* Top bar with usage meter */}
+      <div style={styles.topBar}>
+        <span style={styles.brandSmall}>🧁 Muffin</span>
+        <div style={styles.topBarRight}>
+          <UsageMeter refreshKey={usageRefresh} onLimitReached={() => setShowUpgrade(true)} />
+          <button onClick={() => setShowCredits(true)} style={styles.creditsBtn}>Credits</button>
+          <button onClick={() => setShowTemplateShare(true)} style={styles.creditsBtn}>Import</button>
+        </div>
       </div>
 
-      {/* Audio settings dropdown */}
-      {showAudioSettings && (
-        <div style={styles.audioSettingsPanel} data-no-tap>
-          <AudioSettings
-            selectedInput={inputDevice}
-            selectedOutput={outputDevice}
-            onChangeInput={setInputDevice}
-            onChangeOutput={setOutputDevice}
-          />
-          <button onClick={() => setShowAudioSettings(false)} style={styles.doneBtn}>Done</button>
-        </div>
-      )}
+      <h1 style={styles.title}>Muffin Voice</h1>
 
       <div style={styles.orbWrapper}>
         <VoiceOrb state={orbState} audioLevel={audioLevel} />
       </div>
 
       <p style={styles.status}>{statusText}</p>
-      {orbState === 'idle' && (
-        <p style={styles.hint}>Tap anywhere to start</p>
-      )}
 
       {error && <p style={styles.error}>{error}</p>}
 
-      <div style={styles.bottomControls}>
+      <div style={styles.buttonRow}>
         <button onClick={handleToggle} style={{
           ...styles.button,
           ...(orbState !== 'idle' ? styles.buttonActive : {}),
         }}>
           {orbState === 'idle' ? 'Start Conversation' : 'End Conversation'}
         </button>
-
-        {orbState !== 'idle' && (
-          <button
-            onClick={() => setHandsFree(!handsFree)}
-            style={{
-              ...styles.handsFreeBadge,
-              ...(handsFree ? styles.handsFreeActive : {}),
-            }}
-          >
-            {handsFree ? '🙌 Hands-free ON' : '✋ Hands-free'}
-          </button>
-        )}
       </div>
 
-      {/* Ambient panel */}
-      <AmbientSound open={ambientOpen} onClose={() => setAmbientOpen(false)} />
+      {/* Modals */}
+      {showCredits && (
+        <CreditsDisplay onClose={() => setShowCredits(false)} onUpgrade={() => { setShowCredits(false); setShowUpgrade(true); }} />
+      )}
+      {showUpgrade && <UpgradePrompt onClose={() => setShowUpgrade(false)} />}
+      {showShare && (
+        <ShareDialog
+          personaName="Muffin"
+          personaIcon="🧁"
+          durationMinutes={lastSessionMinutes}
+          onClose={() => setShowShare(false)}
+        />
+      )}
+      {showTemplateShare && (
+        <TemplateShare
+          onImport={handleImportPersona}
+          onClose={() => setShowTemplateShare(false)}
+        />
+      )}
     </div>
   );
 };
@@ -347,11 +385,44 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 24,
+    gap: 32,
     padding: 24,
     background: 'linear-gradient(180deg, #0a0a0f 0%, #0f0f1a 100%)',
-    cursor: 'default',
-    userSelect: 'none',
+  },
+  topBar: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 20px',
+    background: 'rgba(10,10,15,0.85)',
+    backdropFilter: 'blur(12px)',
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
+    zIndex: 50,
+  },
+  brandSmall: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.5)',
+    fontWeight: 600,
+    letterSpacing: 1,
+  },
+  topBarRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+  },
+  creditsBtn: {
+    padding: '6px 12px',
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 8,
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 12,
+    cursor: 'pointer',
+    fontWeight: 500,
   },
   title: {
     fontSize: 28,
@@ -359,51 +430,6 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 4,
     textTransform: 'uppercase' as const,
     color: 'rgba(255,255,255,0.7)',
-  },
-  topControls: {
-    position: 'fixed',
-    top: 16,
-    right: 16,
-    display: 'flex',
-    gap: 8,
-    zIndex: 50,
-  },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    border: '1px solid rgba(255,255,255,0.1)',
-    background: 'rgba(255,255,255,0.05)',
-    fontSize: 20,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'all 0.2s',
-    backdropFilter: 'blur(10px)',
-  },
-  audioSettingsPanel: {
-    position: 'fixed',
-    top: 68,
-    right: 16,
-    width: 300,
-    background: 'linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%)',
-    borderRadius: 16,
-    padding: 16,
-    border: '1px solid rgba(255,255,255,0.1)',
-    zIndex: 50,
-    backdropFilter: 'blur(10px)',
-  },
-  doneBtn: {
-    width: '100%',
-    padding: 10,
-    marginTop: 12,
-    background: 'rgba(255,255,255,0.08)',
-    border: '1px solid rgba(255,255,255,0.15)',
-    borderRadius: 10,
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    cursor: 'pointer',
   },
   orbWrapper: {
     display: 'flex',
@@ -414,13 +440,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 16,
     color: 'rgba(255,255,255,0.5)',
     letterSpacing: 1,
-    margin: 0,
-  },
-  hint: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.25)',
-    margin: 0,
-    animation: 'slowPulse 3s ease-in-out infinite',
   },
   error: {
     fontSize: 14,
@@ -431,10 +450,8 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: 400,
     textAlign: 'center' as const,
   },
-  bottomControls: {
+  buttonRow: {
     display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
     gap: 12,
   },
   button: {
@@ -453,21 +470,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderColor: 'rgba(248, 113, 113, 0.4)',
     background: 'rgba(248, 113, 113, 0.1)',
     color: '#f87171',
-  },
-  handsFreeBadge: {
-    padding: '8px 20px',
-    fontSize: 13,
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 50,
-    background: 'rgba(255,255,255,0.04)',
-    color: 'rgba(255,255,255,0.5)',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-  },
-  handsFreeActive: {
-    borderColor: 'rgba(34, 197, 94, 0.4)',
-    background: 'rgba(34, 197, 94, 0.12)',
-    color: '#22c55e',
   },
 };
 

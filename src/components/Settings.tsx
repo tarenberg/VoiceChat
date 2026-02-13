@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile, Persona } from '../types';
+import { isPremium, setPremium } from '../services/usageTracker';
 
 interface Props {
   profile: UserProfile;
@@ -12,6 +13,7 @@ const Settings: React.FC<Props> = ({ profile, onSave, onClose, onDeletePersona }
   const [name, setName] = useState(profile.name);
   const [interestInput, setInterestInput] = useState('');
   const [interests, setInterests] = useState<string[]>(profile.interests);
+  const [premium, setPremiumState] = useState(isPremium());
 
   const addInterest = () => {
     const tag = interestInput.trim();
@@ -62,6 +64,22 @@ const Settings: React.FC<Props> = ({ profile, onSave, onClose, onDeletePersona }
               <button onClick={() => removeInterest(t)} style={styles.tagX}>×</button>
             </span>
           ))}
+        </div>
+
+        <label style={{ ...styles.label, marginTop: 20 }}>Subscription</label>
+        <div style={styles.personaRow}>
+          <span style={{ color: 'rgba(255,255,255,0.8)' }}>👑 Premium Mode</span>
+          <button
+            onClick={() => { const v = !premium; setPremiumState(v); setPremium(v); }}
+            style={{
+              ...styles.delBtn,
+              background: premium ? 'rgba(52,211,153,0.15)' : 'rgba(255,255,255,0.06)',
+              borderColor: premium ? 'rgba(52,211,153,0.3)' : 'rgba(255,255,255,0.1)',
+              color: premium ? '#34d399' : 'rgba(255,255,255,0.5)',
+            }}
+          >
+            {premium ? 'ON' : 'OFF'}
+          </button>
         </div>
 
         {profile.customPersonas.length > 0 && (
