@@ -11,10 +11,15 @@
   </head>
   <body>
     <div id="root"></div>
+    <p id="loadcheck" style="color:yellow;padding:20px;position:fixed;top:0;left:0;z-index:9999;font-size:18px;">Loading app...</p>
     <script>
       window.addEventListener('error', function(e) {
-        document.body.style.background = '#1a0000';
-        document.body.innerHTML = '<pre style="color:#f87171;padding:40px;font-size:14px;white-space:pre-wrap">LOAD ERROR:\n' + e.message + '\n\nFile: ' + e.filename + '\nLine: ' + e.lineno + '</pre>';
+        document.getElementById('loadcheck').innerHTML = 'ERROR: ' + e.message + '<br>File: ' + e.filename + ':' + e.lineno;
+        document.getElementById('loadcheck').style.color = 'red';
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        document.getElementById('loadcheck').innerHTML = 'PROMISE ERROR: ' + e.reason;
+        document.getElementById('loadcheck').style.color = 'red';
       });
     </script>
     <script type="module" src="/src/main.tsx"></script>
