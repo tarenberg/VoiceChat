@@ -477,7 +477,10 @@ const App: React.FC = () => {
   const isActive = orbState !== 'idle';
 
   return (
-    <div style={styles.page} onClick={handlePageClick}>
+    <div style={{minHeight:'100vh',background:'#0a0a0f',color:'#fff',padding:20}} onClick={handlePageClick}>
+      <h1 style={{color:'#8B5CF6',fontSize:28,textAlign:'center',marginTop:40}}>🧁 Muffin Voice</h1>
+      <p style={{color:'#aaa',textAlign:'center',marginTop:10}}>If you can see this, the app is working!</p>
+      <hr style={{borderColor:'#333',margin:'20px 0'}} />
       {/* ===== TOP BAR ===== */}
       <div style={styles.topBar}>
         <div style={styles.topBarLeft}>
