@@ -1,14 +1,20 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import VoiceOrb, { OrbState } from './components/VoiceOrb';
+import ModeSelector from './components/ModeSelector';
+import ModeSetup from './components/ModeSetup';
+import { Mode } from './data/modes';
 
-const SYSTEM_INSTRUCTION = `You are Muffin, Tom's friendly AI assistant. You have a warm, conversational personality. Talk naturally like a friend. Keep responses concise and conversational — this is a voice chat, not an essay. Be helpful, have opinions, and be genuinely engaging.`;
+const BASE_SYSTEM_INSTRUCTION = `You are Muffin, Tom's friendly AI assistant. You have a warm, conversational personality. Talk naturally like a friend. Keep responses concise and conversational — this is a voice chat, not an essay. Be helpful, have opinions, and be genuinely engaging.`;
 
 const App: React.FC = () => {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [statusText, setStatusText] = useState('Tap to start');
   const [error, setError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [selectedMode, setSelectedMode] = useState<Mode | null>(null);
+  const [showSetup, setShowSetup] = useState<Mode | null>(null);
+  const [activeMode, setActiveMode] = useState<{ mode: Mode; config?: string } | null>(null);
 
   const sessionRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -137,7 +143,7 @@ const App: React.FC = () => {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
           },
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: buildSystemPrompt(),
         },
         callbacks,
       });
@@ -184,6 +190,37 @@ const App: React.FC = () => {
     setAudioLevel(0);
   }, []);
 
+  const handleModeSelect = (mode: Mode | null) => {
+    if (!mode) {
+      setSelectedMode(null);
+      setActiveMode(null);
+      return;
+    }
+    if (mode.settings?.requiresLanguage || mode.settings?.requiresRole) {
+      setShowSetup(mode);
+    } else {
+      setSelectedMode(mode);
+      setActiveMode({ mode });
+    }
+  };
+
+  const handleSetupConfirm = (value: string) => {
+    if (showSetup) {
+      setSelectedMode(showSetup);
+      setActiveMode({ mode: showSetup, config: value });
+      setShowSetup(null);
+    }
+  };
+
+  const buildSystemPrompt = (): string => {
+    if (!activeMode) return BASE_SYSTEM_INSTRUCTION;
+    let modePrompt = activeMode.mode.systemPromptOverride;
+    if (activeMode.config) {
+      modePrompt = modePrompt.replace(/\[language\]/gi, activeMode.config).replace(/\[role\]/gi, activeMode.config);
+    }
+    return `${BASE_SYSTEM_INSTRUCTION}\n\nAdditional mode: ${modePrompt}`;
+  };
+
   const handleToggle = () => {
     if (orbState === 'idle') connect();
     else disconnect();
@@ -195,11 +232,21 @@ const App: React.FC = () => {
 
       <div style={styles.orbWrapper}>
         <VoiceOrb state={orbState} audioLevel={audioLevel} />
+        {activeMode && orbState !== 'idle' && (
+          <div style={{ ...styles.modeIndicator, color: activeMode.mode.color, borderColor: activeMode.mode.color + '40' }}>
+            <span>{activeMode.mode.icon}</span>
+            <span>{activeMode.mode.name}{activeMode.config ? ` · ${activeMode.config}` : ''}</span>
+          </div>
+        )}
       </div>
 
       <p style={styles.status}>{statusText}</p>
 
       {error && <p style={styles.error}>{error}</p>}
+
+      {orbState === 'idle' && (
+        <ModeSelector selectedMode={selectedMode} onSelect={handleModeSelect} disabled={orbState !== 'idle'} />
+      )}
 
       <button onClick={handleToggle} style={{
         ...styles.button,
@@ -207,6 +254,10 @@ const App: React.FC = () => {
       }}>
         {orbState === 'idle' ? 'Start Conversation' : 'End Conversation'}
       </button>
+
+      {showSetup && (
+        <ModeSetup mode={showSetup} onConfirm={handleSetupConfirm} onCancel={() => setShowSetup(null)} />
+      )}
     </div>
   );
 };
@@ -265,8 +316,22 @@ const styles: Record<string, React.CSSProperties> = {
   },
   orbWrapper: {
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
+  },
+  modeIndicator: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 13,
+    fontWeight: 500,
+    padding: '6px 14px',
+    borderRadius: 20,
+    border: '1px solid',
+    background: 'rgba(0,0,0,0.3)',
+    letterSpacing: 0.5,
   },
   status: {
     fontSize: 16,
