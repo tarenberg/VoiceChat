@@ -1,32 +1,21 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 import VoiceOrb, { OrbState } from './components/VoiceOrb';
-import ConversationHistory from './components/ConversationHistory';
-import ConversationDetail from './components/ConversationDetail';
-import {
-  Conversation,
-  createConversation,
-  saveConversation,
-} from './services/conversationStore';
-import {
-  MemoryFact,
-  getAllFacts,
-  saveFacts,
-  extractMemoryFromTranscript,
-  generateSummary,
-  buildMemoryPrompt,
-} from './services/memoryStore';
+import AmbientSound from './components/AmbientSound';
+import AudioSettings from './components/AudioSettings';
 
-const BASE_SYSTEM_INSTRUCTION = `You are Muffin, Tom's friendly AI assistant. You have a warm, conversational personality. Talk naturally like a friend. Keep responses concise and conversational — this is a voice chat, not an essay. Be helpful, have opinions, and be genuinely engaging.`;
+const SYSTEM_INSTRUCTION = `You are Muffin, Tom's friendly AI assistant. You have a warm, conversational personality. Talk naturally like a friend. Keep responses concise and conversational — this is a voice chat, not an essay. Be helpful, have opinions, and be genuinely engaging.`;
 
 const App: React.FC = () => {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [statusText, setStatusText] = useState('Tap to start');
   const [error, setError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [detailConversation, setDetailConversation] = useState<Conversation | null>(null);
-  const [bookmarkFlash, setBookmarkFlash] = useState(false);
+  const [ambientOpen, setAmbientOpen] = useState(false);
+  const [showAudioSettings, setShowAudioSettings] = useState(false);
+  const [inputDevice, setInputDevice] = useState('');
+  const [outputDevice, setOutputDevice] = useState('');
+  const [handsFree, setHandsFree] = useState(false);
 
   const sessionRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -37,63 +26,18 @@ const App: React.FC = () => {
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const connectedRef = useRef(false);
-  const currentConvRef = useRef<Conversation | null>(null);
-  const memoryFactsRef = useRef<MemoryFact[]>([]);
+  const handsFreeRef = useRef(false);
+
+  // Keep ref in sync
+  useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
 
   useEffect(() => {
-    // Load memory facts on mount
-    getAllFacts().then(facts => { memoryFactsRef.current = facts; });
     return () => { disconnect(); };
   }, []);
 
-  const addBookmark = useCallback(() => {
-    if (!currentConvRef.current || !connectedRef.current) return;
-    const bookmark = {
-      id: crypto.randomUUID(),
-      timestamp: Date.now(),
-    };
-    currentConvRef.current.bookmarks.push(bookmark);
-    setBookmarkFlash(true);
-    setTimeout(() => setBookmarkFlash(false), 600);
-  }, []);
-
-  const finalizeConversation = useCallback(async () => {
-    const conv = currentConvRef.current;
-    if (!conv) return;
-
-    conv.endedAt = Date.now();
-
-    // Build transcript from messages
-    const transcript = conv.messages
-      .map(m => `${m.role === 'user' ? 'User' : 'Muffin'}: ${m.transcription || '(audio)'}`)
-      .join('\n');
-
-    const apiKey = import.meta.env.VITE_API_KEY;
-    if (apiKey && transcript.trim()) {
-      // Generate summary
-      const summary = await generateSummary(apiKey, transcript);
-      if (summary) conv.summary = summary;
-
-      // Generate title from summary or first message
-      if (summary) {
-        conv.title = summary.length > 60 ? summary.substring(0, 57) + '...' : summary;
-      } else if (conv.messages.length > 0) {
-        const first = conv.messages.find(m => m.transcription);
-        conv.title = first?.transcription?.substring(0, 50) || 'Voice Conversation';
-      }
-
-      // Extract memory
-      const newFacts = await extractMemoryFromTranscript(
-        apiKey, transcript, conv.id, memoryFactsRef.current
-      );
-      if (newFacts.length > 0) {
-        await saveFacts(newFacts);
-        memoryFactsRef.current = [...memoryFactsRef.current, ...newFacts];
-      }
-    }
-
-    await saveConversation(conv);
-    currentConvRef.current = null;
+  // Haptic helper
+  const haptic = useCallback((pattern: number | number[]) => {
+    try { navigator.vibrate?.(pattern); } catch {}
   }, []);
 
   const connect = useCallback(async () => {
@@ -108,20 +52,15 @@ const App: React.FC = () => {
       setOrbState('connecting');
       setStatusText('Connecting...');
 
-      // Create conversation record
-      const conv = createConversation('muffin');
-      currentConvRef.current = conv;
-
-      // Build system prompt with memory
-      const memoryPrompt = buildMemoryPrompt(memoryFactsRef.current);
-      const systemInstruction = BASE_SYSTEM_INSTRUCTION + memoryPrompt;
-
       const ai = new GoogleGenAI({ apiKey });
 
       inputCtxRef.current = new AudioContext({ sampleRate: 16000 });
       outputCtxRef.current = new AudioContext({ sampleRate: 24000 });
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const constraints: MediaStreamConstraints = {
+        audio: inputDevice ? { deviceId: { exact: inputDevice } } : true,
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
 
       const callbacks = {
@@ -129,7 +68,10 @@ const App: React.FC = () => {
           connectedRef.current = true;
           setOrbState('listening');
           setStatusText('Listening...');
+          // Haptic: connected
+          haptic([100, 50, 100]);
 
+          // Set up mic input
           if (inputCtxRef.current) {
             const source = inputCtxRef.current.createMediaStreamSource(stream);
             sourceNodeRef.current = source;
@@ -154,6 +96,8 @@ const App: React.FC = () => {
           if (audioData && outputCtxRef.current) {
             setOrbState('speaking');
             setStatusText('Muffin is speaking...');
+            // Haptic: AI speaking
+            haptic(50);
 
             const ctx = outputCtxRef.current;
             nextStartTimeRef.current = Math.max(nextStartTimeRef.current, ctx.currentTime);
@@ -178,6 +122,7 @@ const App: React.FC = () => {
             nextStartTimeRef.current += buffer.duration;
             sourcesRef.current.add(src);
 
+            // Estimate audio level from PCM data
             const int16 = new Int16Array(raw.buffer);
             let sum = 0;
             for (let i = 0; i < int16.length; i++) sum += Math.abs(int16[i]);
@@ -185,22 +130,7 @@ const App: React.FC = () => {
             setAudioLevel(Math.min(1, avg * 4));
           }
 
-          // Track AI messages (no transcription available from audio-only model for now)
-          if (message.serverContent?.modelTurn?.parts?.length > 0) {
-            if (currentConvRef.current) {
-              // Only add one message entry per turn
-              const parts = message.serverContent.modelTurn.parts;
-              const textPart = parts.find((p: any) => p.text);
-              if (textPart) {
-                currentConvRef.current.messages.push({
-                  role: 'ai',
-                  timestamp: Date.now(),
-                  transcription: textPart.text,
-                });
-              }
-            }
-          }
-
+          // Handle turn complete
           if (message.serverContent?.turnComplete) {
             if (connectedRef.current) {
               setOrbState('listening');
@@ -211,17 +141,26 @@ const App: React.FC = () => {
         },
         onclose: () => {
           connectedRef.current = false;
+          if (handsFreeRef.current) {
+            // Auto-reconnect in hands-free mode
+            setOrbState('connecting');
+            setStatusText('Reconnecting...');
+            setTimeout(() => connect(), 1000);
+            return;
+          }
           setOrbState('idle');
           setStatusText('Disconnected');
-          finalizeConversation();
         },
         onerror: (e: any) => {
           console.error('Session error', e);
           setError('Connection lost. Try again.');
           connectedRef.current = false;
+          if (handsFreeRef.current) {
+            setTimeout(() => connect(), 2000);
+            return;
+          }
           setOrbState('idle');
           setStatusText('Tap to start');
-          finalizeConversation();
         },
       };
 
@@ -232,7 +171,7 @@ const App: React.FC = () => {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
           },
-          systemInstruction: systemInstruction,
+          systemInstruction: SYSTEM_INSTRUCTION,
         },
         callbacks,
       });
@@ -246,23 +185,30 @@ const App: React.FC = () => {
       setOrbState('idle');
       setStatusText('Tap to start');
     }
-  }, [finalizeConversation]);
+  }, [inputDevice, haptic]);
 
   const disconnect = useCallback(() => {
     connectedRef.current = false;
+    handsFreeRef.current = false;
+    setHandsFree(false);
 
+    // Stop audio sources
     sourcesRef.current.forEach((s) => { try { s.stop(); } catch {} });
     sourcesRef.current.clear();
 
+    // Disconnect audio nodes
     scriptProcessorRef.current?.disconnect();
     sourceNodeRef.current?.disconnect();
 
+    // Close session
     try { sessionRef.current?.close(); } catch {}
     sessionRef.current = null;
 
+    // Stop mic
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
 
+    // Close audio contexts
     try { inputCtxRef.current?.close(); } catch {}
     try { outputCtxRef.current?.close(); } catch {}
     inputCtxRef.current = null;
@@ -272,76 +218,90 @@ const App: React.FC = () => {
     setOrbState('idle');
     setStatusText('Tap to start');
     setAudioLevel(0);
-
-    finalizeConversation();
-  }, [finalizeConversation]);
+  }, []);
 
   const handleToggle = () => {
     if (orbState === 'idle') connect();
     else disconnect();
   };
 
-  const isActive = orbState !== 'idle';
+  // Tap-anywhere-to-talk when idle
+  const handlePageTap = (e: React.MouseEvent) => {
+    // Don't trigger if clicking a button or control
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('input') || target.closest('select') || target.closest('[data-no-tap]')) return;
+    if (orbState === 'idle') connect();
+  };
 
   return (
-    <div style={styles.page}>
-      {/* Top bar */}
-      <div style={styles.topBar}>
-        <button onClick={() => setHistoryOpen(true)} style={styles.iconButton} title="Conversation History">
-          🕐
+    <div style={styles.page} onClick={handlePageTap}>
+      <h1 style={styles.title}>Muffin Voice</h1>
+
+      {/* Top-right controls */}
+      <div style={styles.topControls}>
+        <button
+          onClick={() => setAmbientOpen(true)}
+          style={styles.iconBtn}
+          title="Ambient Sounds"
+        >
+          🎵
         </button>
-        {isActive && (
-          <button
-            onClick={addBookmark}
-            style={{
-              ...styles.iconButton,
-              ...(bookmarkFlash ? { transform: 'scale(1.3)', color: '#fbbf24' } : {}),
-              transition: 'all 0.2s ease',
-            }}
-            title="Add Bookmark"
-          >
-            ⭐
-          </button>
-        )}
+        <button
+          onClick={() => setShowAudioSettings(!showAudioSettings)}
+          style={styles.iconBtn}
+          title="Audio Settings"
+        >
+          🎧
+        </button>
       </div>
 
-      <h1 style={styles.title}>Muffin Voice</h1>
+      {/* Audio settings dropdown */}
+      {showAudioSettings && (
+        <div style={styles.audioSettingsPanel} data-no-tap>
+          <AudioSettings
+            selectedInput={inputDevice}
+            selectedOutput={outputDevice}
+            onChangeInput={setInputDevice}
+            onChangeOutput={setOutputDevice}
+          />
+          <button onClick={() => setShowAudioSettings(false)} style={styles.doneBtn}>Done</button>
+        </div>
+      )}
 
       <div style={styles.orbWrapper}>
         <VoiceOrb state={orbState} audioLevel={audioLevel} />
       </div>
 
       <p style={styles.status}>{statusText}</p>
+      {orbState === 'idle' && (
+        <p style={styles.hint}>Tap anywhere to start</p>
+      )}
 
       {error && <p style={styles.error}>{error}</p>}
 
-      <button onClick={handleToggle} style={{
-        ...styles.button,
-        ...(orbState !== 'idle' ? styles.buttonActive : {}),
-      }}>
-        {orbState === 'idle' ? 'Start Conversation' : 'End Conversation'}
-      </button>
+      <div style={styles.bottomControls}>
+        <button onClick={handleToggle} style={{
+          ...styles.button,
+          ...(orbState !== 'idle' ? styles.buttonActive : {}),
+        }}>
+          {orbState === 'idle' ? 'Start Conversation' : 'End Conversation'}
+        </button>
 
-      {/* Memory indicator */}
-      {memoryFactsRef.current.length > 0 && orbState === 'idle' && (
-        <p style={styles.memoryHint}>
-          🧠 {memoryFactsRef.current.length} thing{memoryFactsRef.current.length !== 1 ? 's' : ''} remembered
-        </p>
-      )}
+        {orbState !== 'idle' && (
+          <button
+            onClick={() => setHandsFree(!handsFree)}
+            style={{
+              ...styles.handsFreeBadge,
+              ...(handsFree ? styles.handsFreeActive : {}),
+            }}
+          >
+            {handsFree ? '🙌 Hands-free ON' : '✋ Hands-free'}
+          </button>
+        )}
+      </div>
 
-      <ConversationHistory
-        isOpen={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        onSelectConversation={(conv) => {
-          setHistoryOpen(false);
-          setDetailConversation(conv);
-        }}
-      />
-
-      <ConversationDetail
-        conversation={detailConversation}
-        onClose={() => setDetailConversation(null)}
-      />
+      {/* Ambient panel */}
+      <AmbientSound open={ambientOpen} onClose={() => setAmbientOpen(false)} />
     </div>
   );
 };
@@ -387,33 +347,11 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 32,
+    gap: 24,
     padding: 24,
     background: 'linear-gradient(180deg, #0a0a0f 0%, #0f0f1a 100%)',
-    position: 'relative',
-  },
-  topBar: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    right: 16,
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  iconButton: {
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: 12,
-    width: 44,
-    height: 44,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 20,
-    cursor: 'pointer',
-    color: 'rgba(255,255,255,0.6)',
+    cursor: 'default',
+    userSelect: 'none',
   },
   title: {
     fontSize: 28,
@@ -421,6 +359,51 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 4,
     textTransform: 'uppercase' as const,
     color: 'rgba(255,255,255,0.7)',
+  },
+  topControls: {
+    position: 'fixed',
+    top: 16,
+    right: 16,
+    display: 'flex',
+    gap: 8,
+    zIndex: 50,
+  },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    border: '1px solid rgba(255,255,255,0.1)',
+    background: 'rgba(255,255,255,0.05)',
+    fontSize: 20,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s',
+    backdropFilter: 'blur(10px)',
+  },
+  audioSettingsPanel: {
+    position: 'fixed',
+    top: 68,
+    right: 16,
+    width: 300,
+    background: 'linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%)',
+    borderRadius: 16,
+    padding: 16,
+    border: '1px solid rgba(255,255,255,0.1)',
+    zIndex: 50,
+    backdropFilter: 'blur(10px)',
+  },
+  doneBtn: {
+    width: '100%',
+    padding: 10,
+    marginTop: 12,
+    background: 'rgba(255,255,255,0.08)',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: 10,
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    cursor: 'pointer',
   },
   orbWrapper: {
     display: 'flex',
@@ -431,6 +414,13 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 16,
     color: 'rgba(255,255,255,0.5)',
     letterSpacing: 1,
+    margin: 0,
+  },
+  hint: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.25)',
+    margin: 0,
+    animation: 'slowPulse 3s ease-in-out infinite',
   },
   error: {
     fontSize: 14,
@@ -440,6 +430,12 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     maxWidth: 400,
     textAlign: 'center' as const,
+  },
+  bottomControls: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 12,
   },
   button: {
     padding: '14px 36px',
@@ -458,10 +454,20 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(248, 113, 113, 0.1)',
     color: '#f87171',
   },
-  memoryHint: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.25)',
-    letterSpacing: 0.5,
+  handsFreeBadge: {
+    padding: '8px 20px',
+    fontSize: 13,
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 50,
+    background: 'rgba(255,255,255,0.04)',
+    color: 'rgba(255,255,255,0.5)',
+    cursor: 'pointer',
+    transition: 'all 0.3s ease',
+  },
+  handsFreeActive: {
+    borderColor: 'rgba(34, 197, 94, 0.4)',
+    background: 'rgba(34, 197, 94, 0.12)',
+    color: '#22c55e',
   },
 };
 
