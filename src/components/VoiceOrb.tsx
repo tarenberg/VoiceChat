@@ -4,102 +4,122 @@ export type OrbState = 'idle' | 'connecting' | 'listening' | 'speaking';
 
 interface Props {
   state: OrbState;
-  audioLevel?: number;
-  color?: string;
+  audioLevel?: number; // 0-1
 }
 
-function hexToRgb(hex: string): string {
-  const h = hex.replace('#', '');
-  const r = parseInt(h.substring(0, 2), 16);
-  const g = parseInt(h.substring(2, 4), 16);
-  const b = parseInt(h.substring(4, 6), 16);
-  return `${r}, ${g}, ${b}`;
-}
+const SIZE = 240;
+const PARTICLE_COUNT = 18;
 
-function darken(hex: string, amount: number): string {
-  const h = hex.replace('#', '');
-  const r = Math.max(0, parseInt(h.substring(0, 2), 16) - amount);
-  const g = Math.max(0, parseInt(h.substring(2, 4), 16) - amount);
-  const b = Math.max(0, parseInt(h.substring(4, 6), 16) - amount);
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
-const VoiceOrb: React.FC<Props> = ({ state, audioLevel = 0, color = '#a78bfa' }) => {
+const VoiceOrb: React.FC<Props> = ({ state, audioLevel = 0 }) => {
   const scale = state === 'speaking' ? 1 + audioLevel * 0.3 : 1;
-  const rgb = useMemo(() => hexToRgb(color), [color]);
-  const dark = useMemo(() => darken(color, 100), [color]);
-  const darker = useMemo(() => darken(color, 160), [color]);
 
-  const dynamicStyles = useMemo(() => ({
-    orbConnecting: {
-      background: `conic-gradient(from 0deg, ${color}, ${dark}, ${color})`,
-      boxShadow: `0 0 60px rgba(${rgb}, 0.4)`,
-      animation: 'spin 2s linear infinite',
-    },
-    orbListening: {
-      background: `radial-gradient(circle at 40% 40%, ${color}, ${dark})`,
-      boxShadow: `0 0 80px rgba(${rgb}, 0.5), 0 0 120px rgba(${rgb}, 0.2)`,
-      animation: 'breathe 3s ease-in-out infinite',
-    },
-    orbSpeaking: {
-      background: `radial-gradient(circle at 40% 40%, ${color}, ${dark}, ${darker})`,
-      boxShadow: `0 0 80px rgba(${rgb}, 0.6), 0 0 140px rgba(${rgb}, 0.3)`,
-    },
-    ringListening1: {
-      border: `2px solid rgba(${rgb}, 0.3)`,
-      animation: 'ringPulse1 3s ease-in-out infinite',
-    },
-    ringListening2: {
-      border: `1px solid rgba(${rgb}, 0.15)`,
-      animation: 'ringPulse2 3s ease-in-out infinite 0.5s',
-    },
-    ringSpeaking1: {
-      border: `2px solid rgba(${rgb}, 0.4)`,
-      animation: 'ripple 1.5s ease-out infinite',
-    },
-    ringSpeaking2: {
-      border: `2px solid rgba(${rgb}, 0.3)`,
-      animation: 'rippleSlow 2s ease-out infinite 0.3s',
-    },
-    ringSpeaking3: {
-      border: `1px solid rgba(${rgb}, 0.2)`,
-      animation: 'rippleFast 2.5s ease-out infinite 0.6s',
-    },
-    ringConnecting: {
-      border: `2px dashed rgba(${rgb}, 0.4)`,
-      animation: 'spin 3s linear infinite reverse',
-    },
-  }), [color, rgb, dark, darker]);
+  // Generate stable particle positions
+  const particles = useMemo(
+    () =>
+      Array.from({ length: PARTICLE_COUNT }, (_, i) => ({
+        angle: (360 / PARTICLE_COUNT) * i + Math.random() * 20,
+        dist: 130 + Math.random() * 40,
+        size: 2 + Math.random() * 3,
+        duration: 2 + Math.random() * 3,
+        delay: Math.random() * 3,
+        opacity: 0.3 + Math.random() * 0.5,
+      })),
+    [],
+  );
+
+  // Waveform ring segments
+  const waveSegments = useMemo(() => Array.from({ length: 36 }, (_, i) => i * 10), []);
 
   return (
     <div style={styles.container}>
+      {/* Waveform ring — visible when speaking */}
+      {state === 'speaking' && (
+        <div style={styles.waveRing}>
+          {waveSegments.map((deg, i) => {
+            const h = 6 + audioLevel * 28 * (0.5 + 0.5 * Math.sin(i * 0.8 + audioLevel * 6));
+            return (
+              <div
+                key={i}
+                style={{
+                  position: 'absolute',
+                  width: 3,
+                  height: h,
+                  borderRadius: 2,
+                  background: `rgba(192, 132, 252, ${0.4 + audioLevel * 0.5})`,
+                  left: '50%',
+                  top: '50%',
+                  transformOrigin: '50% 50%',
+                  transform: `rotate(${deg}deg) translate(0, -${SIZE / 2 + 14 + audioLevel * 6}px)`,
+                  transition: 'height 0.08s ease-out',
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Concentric pulse rings */}
       {state === 'listening' && (
         <>
-          <div style={{ ...styles.ring, ...dynamicStyles.ringListening1 }} />
-          <div style={{ ...styles.ring, ...dynamicStyles.ringListening2 }} />
+          <div style={{ ...styles.ring, ...styles.ringListening1 }} />
+          <div style={{ ...styles.ring, ...styles.ringListening2 }} />
+          <div style={{ ...styles.ring, ...styles.ringListening3 }} />
         </>
       )}
       {state === 'speaking' && (
         <>
-          <div style={{ ...styles.ring, ...dynamicStyles.ringSpeaking1, transform: `scale(${1 + audioLevel * 0.5})` }} />
-          <div style={{ ...styles.ring, ...dynamicStyles.ringSpeaking2, transform: `scale(${1 + audioLevel * 0.3})` }} />
-          <div style={{ ...styles.ring, ...dynamicStyles.ringSpeaking3, transform: `scale(${1 + audioLevel * 0.7})` }} />
+          <div style={{ ...styles.ring, ...styles.ringSpeaking1, transform: `scale(${1 + audioLevel * 0.5})` }} />
+          <div style={{ ...styles.ring, ...styles.ringSpeaking2, transform: `scale(${1 + audioLevel * 0.3})` }} />
+          <div style={{ ...styles.ring, ...styles.ringSpeaking3, transform: `scale(${1 + audioLevel * 0.7})` }} />
+          <div style={{ ...styles.ring, ...styles.ringSpeaking4, transform: `scale(${1 + audioLevel * 0.9})` }} />
         </>
       )}
       {state === 'connecting' && (
-        <div style={{ ...styles.ring, ...dynamicStyles.ringConnecting }} />
+        <div style={{ ...styles.ring, ...styles.ringConnecting }} />
       )}
 
+      {/* Particles — float around when speaking */}
+      {state === 'speaking' &&
+        particles.map((p, i) => {
+          const rad = ((p.angle + audioLevel * 30) * Math.PI) / 180;
+          const x = Math.cos(rad) * (p.dist + audioLevel * 20);
+          const y = Math.sin(rad) * (p.dist + audioLevel * 20);
+          return (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                width: p.size,
+                height: p.size,
+                borderRadius: '50%',
+                background: `rgba(192, 132, 252, ${p.opacity * (0.5 + audioLevel * 0.5)})`,
+                boxShadow: `0 0 ${p.size * 2}px rgba(192,132,252,0.4)`,
+                left: SIZE / 2 + x,
+                top: SIZE / 2 + y,
+                transition: 'all 0.15s ease-out',
+                animation: `particleFloat ${p.duration}s ease-in-out ${p.delay}s infinite alternate`,
+                zIndex: 3,
+              }}
+            />
+          );
+        })}
+
+      {/* Main orb */}
       <div
         style={{
           ...styles.orb,
           ...(state === 'idle' ? styles.orbIdle : {}),
-          ...(state === 'connecting' ? dynamicStyles.orbConnecting : {}),
-          ...(state === 'listening' ? dynamicStyles.orbListening : {}),
-          ...(state === 'speaking' ? dynamicStyles.orbSpeaking : {}),
+          ...(state === 'connecting' ? styles.orbConnecting : {}),
+          ...(state === 'listening' ? styles.orbListening : {}),
+          ...(state === 'speaking' ? styles.orbSpeaking : {}),
           transform: `scale(${scale})`,
         }}
-      />
+      >
+        {/* Inner shimmer overlay */}
+        {(state === 'listening' || state === 'speaking') && (
+          <div style={styles.shimmer} />
+        )}
+      </div>
 
       <style>{`
         @keyframes slowPulse {
@@ -122,6 +142,10 @@ const VoiceOrb: React.FC<Props> = ({ state, audioLevel = 0, color = '#a78bfa' })
           0% { transform: scale(1); opacity: 0.4; }
           100% { transform: scale(2); opacity: 0; }
         }
+        @keyframes rippleOuter {
+          0% { transform: scale(1); opacity: 0.25; }
+          100% { transform: scale(2.3); opacity: 0; }
+        }
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
@@ -134,39 +158,116 @@ const VoiceOrb: React.FC<Props> = ({ state, audioLevel = 0, color = '#a78bfa' })
           0%, 100% { transform: scale(1.1); opacity: 0.2; }
           50% { transform: scale(1.25); opacity: 0.1; }
         }
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
+        @keyframes ringPulse3 {
+          0%, 100% { transform: scale(1.2); opacity: 0.12; }
+          50% { transform: scale(1.35); opacity: 0.06; }
         }
-        @keyframes slideUp {
-          from { transform: translateY(100%); }
-          to { transform: translateY(0); }
+        @keyframes particleFloat {
+          0% { transform: translateY(0px) scale(1); }
+          100% { transform: translateY(-8px) scale(1.3); }
+        }
+        @keyframes shimmerRotate {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
       `}</style>
     </div>
   );
 };
 
-const SIZE = 240;
-
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    position: 'relative', width: SIZE, height: SIZE,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    position: 'relative',
+    width: SIZE + 80,
+    height: SIZE + 80,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waveRing: {
+    position: 'absolute',
+    width: SIZE,
+    height: SIZE,
+    left: 40,
+    top: 40,
+    zIndex: 3,
+    pointerEvents: 'none',
   },
   orb: {
-    width: SIZE, height: SIZE, borderRadius: '50%',
-    transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
-    position: 'relative', zIndex: 2,
+    width: SIZE,
+    height: SIZE,
+    borderRadius: '50%',
+    transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+    position: 'relative',
+    zIndex: 2,
+    overflow: 'hidden',
+  },
+  shimmer: {
+    position: 'absolute',
+    inset: -20,
+    borderRadius: '50%',
+    background: 'conic-gradient(from 0deg, transparent 0%, rgba(255,255,255,0.06) 25%, transparent 50%, rgba(255,255,255,0.04) 75%, transparent 100%)',
+    animation: 'shimmerRotate 6s linear infinite',
   },
   orbIdle: {
     background: 'radial-gradient(circle at 40% 40%, #3a3a4a, #1a1a2e)',
     boxShadow: '0 0 40px rgba(100, 100, 140, 0.2)',
     animation: 'slowPulse 4s ease-in-out infinite',
   },
+  orbConnecting: {
+    background: 'conic-gradient(from 0deg, #667eea, #764ba2, #667eea)',
+    boxShadow: '0 0 60px rgba(102, 126, 234, 0.4)',
+    animation: 'spin 2s linear infinite',
+  },
+  orbListening: {
+    background: 'radial-gradient(circle at 40% 40%, #60a5fa, #1e40af)',
+    boxShadow: '0 0 80px rgba(59, 130, 246, 0.5), 0 0 120px rgba(59, 130, 246, 0.2)',
+    animation: 'breathe 3s ease-in-out infinite',
+  },
+  orbSpeaking: {
+    background: 'radial-gradient(circle at 40% 40%, #c084fc, #7c3aed, #4c1d95)',
+    boxShadow: '0 0 80px rgba(139, 92, 246, 0.6), 0 0 140px rgba(139, 92, 246, 0.3), 0 0 200px rgba(139, 92, 246, 0.15)',
+  },
   ring: {
-    position: 'absolute', top: 0, left: 0, width: SIZE, height: SIZE,
-    borderRadius: '50%', zIndex: 1,
+    position: 'absolute',
+    top: 40,
+    left: 40,
+    width: SIZE,
+    height: SIZE,
+    borderRadius: '50%',
+    zIndex: 1,
+  },
+  ringListening1: {
+    border: '2px solid rgba(59, 130, 246, 0.3)',
+    animation: 'ringPulse1 3s ease-in-out infinite',
+  },
+  ringListening2: {
+    border: '1px solid rgba(59, 130, 246, 0.15)',
+    animation: 'ringPulse2 3s ease-in-out infinite 0.5s',
+  },
+  ringListening3: {
+    border: '1px solid rgba(59, 130, 246, 0.08)',
+    animation: 'ringPulse3 4s ease-in-out infinite 1s',
+  },
+  ringSpeaking1: {
+    border: '2px solid rgba(139, 92, 246, 0.4)',
+    animation: 'ripple 1.5s ease-out infinite',
+  },
+  ringSpeaking2: {
+    border: '2px solid rgba(139, 92, 246, 0.3)',
+    animation: 'rippleSlow 2s ease-out infinite 0.3s',
+  },
+  ringSpeaking3: {
+    border: '1px solid rgba(168, 85, 247, 0.2)',
+    animation: 'rippleFast 2.5s ease-out infinite 0.6s',
+  },
+  ringSpeaking4: {
+    border: '1px solid rgba(168, 85, 247, 0.12)',
+    animation: 'rippleOuter 3s ease-out infinite 0.9s',
+  },
+  ringConnecting: {
+    border: '2px dashed rgba(102, 126, 234, 0.4)',
+    animation: 'spin 3s linear infinite reverse',
   },
 };
 

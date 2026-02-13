@@ -1,21 +1,32 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
-import { Camera, Monitor } from 'lucide-react';
 import VoiceOrb, { OrbState } from './components/VoiceOrb';
-import CameraView from './components/CameraView';
-import ScreenShare from './components/ScreenShare';
-import ImageDisplay from './components/ImageDisplay';
+import ConversationHistory from './components/ConversationHistory';
+import ConversationDetail from './components/ConversationDetail';
+import {
+  Conversation,
+  createConversation,
+  saveConversation,
+} from './services/conversationStore';
+import {
+  MemoryFact,
+  getAllFacts,
+  saveFacts,
+  extractMemoryFromTranscript,
+  generateSummary,
+  buildMemoryPrompt,
+} from './services/memoryStore';
 
-const SYSTEM_INSTRUCTION = `You are Muffin, Tom's friendly AI assistant. You have a warm, conversational personality. Talk naturally like a friend. Keep responses concise and conversational — this is a voice chat, not an essay. Be helpful, have opinions, and be genuinely engaging.`;
+const BASE_SYSTEM_INSTRUCTION = `You are Muffin, Tom's friendly AI assistant. You have a warm, conversational personality. Talk naturally like a friend. Keep responses concise and conversational — this is a voice chat, not an essay. Be helpful, have opinions, and be genuinely engaging.`;
 
 const App: React.FC = () => {
   const [orbState, setOrbState] = useState<OrbState>('idle');
   const [statusText, setStatusText] = useState('Tap to start');
   const [error, setError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
-  const [cameraActive, setCameraActive] = useState(false);
-  const [screenActive, setScreenActive] = useState(false);
-  const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [detailConversation, setDetailConversation] = useState<Conversation | null>(null);
+  const [bookmarkFlash, setBookmarkFlash] = useState(false);
 
   const sessionRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -26,23 +37,63 @@ const App: React.FC = () => {
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const connectedRef = useRef(false);
-
-  const isActive = orbState !== 'idle';
-  const hasMediaPreview = cameraActive || screenActive;
+  const currentConvRef = useRef<Conversation | null>(null);
+  const memoryFactsRef = useRef<MemoryFact[]>([]);
 
   useEffect(() => {
+    // Load memory facts on mount
+    getAllFacts().then(facts => { memoryFactsRef.current = facts; });
     return () => { disconnect(); };
   }, []);
 
-  const sendImageFrame = useCallback((base64: string) => {
-    if (!connectedRef.current || !sessionRef.current) return;
-    try {
-      sessionRef.current.sendRealtimeInput({
-        media: { data: base64, mimeType: 'image/jpeg' },
-      });
-    } catch (err) {
-      console.error('Failed to send image frame:', err);
+  const addBookmark = useCallback(() => {
+    if (!currentConvRef.current || !connectedRef.current) return;
+    const bookmark = {
+      id: crypto.randomUUID(),
+      timestamp: Date.now(),
+    };
+    currentConvRef.current.bookmarks.push(bookmark);
+    setBookmarkFlash(true);
+    setTimeout(() => setBookmarkFlash(false), 600);
+  }, []);
+
+  const finalizeConversation = useCallback(async () => {
+    const conv = currentConvRef.current;
+    if (!conv) return;
+
+    conv.endedAt = Date.now();
+
+    // Build transcript from messages
+    const transcript = conv.messages
+      .map(m => `${m.role === 'user' ? 'User' : 'Muffin'}: ${m.transcription || '(audio)'}`)
+      .join('\n');
+
+    const apiKey = import.meta.env.VITE_API_KEY;
+    if (apiKey && transcript.trim()) {
+      // Generate summary
+      const summary = await generateSummary(apiKey, transcript);
+      if (summary) conv.summary = summary;
+
+      // Generate title from summary or first message
+      if (summary) {
+        conv.title = summary.length > 60 ? summary.substring(0, 57) + '...' : summary;
+      } else if (conv.messages.length > 0) {
+        const first = conv.messages.find(m => m.transcription);
+        conv.title = first?.transcription?.substring(0, 50) || 'Voice Conversation';
+      }
+
+      // Extract memory
+      const newFacts = await extractMemoryFromTranscript(
+        apiKey, transcript, conv.id, memoryFactsRef.current
+      );
+      if (newFacts.length > 0) {
+        await saveFacts(newFacts);
+        memoryFactsRef.current = [...memoryFactsRef.current, ...newFacts];
+      }
     }
+
+    await saveConversation(conv);
+    currentConvRef.current = null;
   }, []);
 
   const connect = useCallback(async () => {
@@ -56,6 +107,14 @@ const App: React.FC = () => {
       setError(null);
       setOrbState('connecting');
       setStatusText('Connecting...');
+
+      // Create conversation record
+      const conv = createConversation('muffin');
+      currentConvRef.current = conv;
+
+      // Build system prompt with memory
+      const memoryPrompt = buildMemoryPrompt(memoryFactsRef.current);
+      const systemInstruction = BASE_SYSTEM_INSTRUCTION + memoryPrompt;
 
       const ai = new GoogleGenAI({ apiKey });
 
@@ -91,19 +150,8 @@ const App: React.FC = () => {
           }
         },
         onmessage: (message: any) => {
-          // Check for image content from Gemini
-          const parts = message.serverContent?.modelTurn?.parts;
-          if (parts) {
-            for (const part of parts) {
-              if (part.inlineData?.mimeType?.startsWith('image/')) {
-                setGeneratedImages(prev => [...prev, part.inlineData.data]);
-              }
-            }
-          }
-
-          const audioData = parts?.[0]?.inlineData?.data;
-          const mimeType = parts?.[0]?.inlineData?.mimeType;
-          if (audioData && mimeType?.startsWith('audio/') && outputCtxRef.current) {
+          const audioData = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+          if (audioData && outputCtxRef.current) {
             setOrbState('speaking');
             setStatusText('Muffin is speaking...');
 
@@ -137,6 +185,22 @@ const App: React.FC = () => {
             setAudioLevel(Math.min(1, avg * 4));
           }
 
+          // Track AI messages (no transcription available from audio-only model for now)
+          if (message.serverContent?.modelTurn?.parts?.length > 0) {
+            if (currentConvRef.current) {
+              // Only add one message entry per turn
+              const parts = message.serverContent.modelTurn.parts;
+              const textPart = parts.find((p: any) => p.text);
+              if (textPart) {
+                currentConvRef.current.messages.push({
+                  role: 'ai',
+                  timestamp: Date.now(),
+                  transcription: textPart.text,
+                });
+              }
+            }
+          }
+
           if (message.serverContent?.turnComplete) {
             if (connectedRef.current) {
               setOrbState('listening');
@@ -149,6 +213,7 @@ const App: React.FC = () => {
           connectedRef.current = false;
           setOrbState('idle');
           setStatusText('Disconnected');
+          finalizeConversation();
         },
         onerror: (e: any) => {
           console.error('Session error', e);
@@ -156,6 +221,7 @@ const App: React.FC = () => {
           connectedRef.current = false;
           setOrbState('idle');
           setStatusText('Tap to start');
+          finalizeConversation();
         },
       };
 
@@ -166,7 +232,7 @@ const App: React.FC = () => {
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
           },
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: systemInstruction,
         },
         callbacks,
       });
@@ -180,12 +246,10 @@ const App: React.FC = () => {
       setOrbState('idle');
       setStatusText('Tap to start');
     }
-  }, []);
+  }, [finalizeConversation]);
 
   const disconnect = useCallback(() => {
     connectedRef.current = false;
-    setCameraActive(false);
-    setScreenActive(false);
 
     sourcesRef.current.forEach((s) => { try { s.stop(); } catch {} });
     sourcesRef.current.clear();
@@ -208,88 +272,75 @@ const App: React.FC = () => {
     setOrbState('idle');
     setStatusText('Tap to start');
     setAudioLevel(0);
-  }, []);
+
+    finalizeConversation();
+  }, [finalizeConversation]);
 
   const handleToggle = () => {
     if (orbState === 'idle') connect();
     else disconnect();
   };
 
-  const canScreenShare = typeof navigator.mediaDevices?.getDisplayMedia === 'function';
+  const isActive = orbState !== 'idle';
 
   return (
     <div style={styles.page}>
-      <h1 style={styles.title}>Muffin Voice</h1>
-
-      <div style={{
-        ...styles.orbWrapper,
-        ...(hasMediaPreview ? { transform: 'scale(0.85) translateY(-20px)' } : {}),
-        transition: 'transform 0.4s ease',
-      }}>
-        <VoiceOrb state={orbState} audioLevel={audioLevel} />
+      {/* Top bar */}
+      <div style={styles.topBar}>
+        <button onClick={() => setHistoryOpen(true)} style={styles.iconButton} title="Conversation History">
+          🕐
+        </button>
+        {isActive && (
+          <button
+            onClick={addBookmark}
+            style={{
+              ...styles.iconButton,
+              ...(bookmarkFlash ? { transform: 'scale(1.3)', color: '#fbbf24' } : {}),
+              transition: 'all 0.2s ease',
+            }}
+            title="Add Bookmark"
+          >
+            ⭐
+          </button>
+        )}
       </div>
 
-      {/* Media previews */}
-      {hasMediaPreview && (
-        <div style={styles.previewRow}>
-          <CameraView
-            active={cameraActive}
-            onFrame={sendImageFrame}
-            onClose={() => setCameraActive(false)}
-          />
-          <ScreenShare
-            active={screenActive}
-            onFrame={sendImageFrame}
-            onClose={() => setScreenActive(false)}
-          />
-        </div>
-      )}
+      <h1 style={styles.title}>Muffin Voice</h1>
+
+      <div style={styles.orbWrapper}>
+        <VoiceOrb state={orbState} audioLevel={audioLevel} />
+      </div>
 
       <p style={styles.status}>{statusText}</p>
 
       {error && <p style={styles.error}>{error}</p>}
 
-      <div style={styles.buttonRow}>
-        <button onClick={handleToggle} style={{
-          ...styles.button,
-          ...(isActive ? styles.buttonActive : {}),
-        }}>
-          {orbState === 'idle' ? 'Start Conversation' : 'End Conversation'}
-        </button>
-      </div>
+      <button onClick={handleToggle} style={{
+        ...styles.button,
+        ...(orbState !== 'idle' ? styles.buttonActive : {}),
+      }}>
+        {orbState === 'idle' ? 'Start Conversation' : 'End Conversation'}
+      </button>
 
-      {/* Floating action buttons for multimodal */}
-      {isActive && (
-        <div style={styles.fabRow}>
-          <button
-            onClick={() => setCameraActive(prev => !prev)}
-            style={{
-              ...styles.fab,
-              ...(cameraActive ? styles.fabActive : {}),
-            }}
-            title="Toggle camera"
-          >
-            <Camera size={20} />
-          </button>
-          {canScreenShare && (
-            <button
-              onClick={() => setScreenActive(prev => !prev)}
-              style={{
-                ...styles.fab,
-                ...(screenActive ? styles.fabActive : {}),
-              }}
-              title="Share screen"
-            >
-              <Monitor size={20} />
-            </button>
-          )}
-        </div>
+      {/* Memory indicator */}
+      {memoryFactsRef.current.length > 0 && orbState === 'idle' && (
+        <p style={styles.memoryHint}>
+          🧠 {memoryFactsRef.current.length} thing{memoryFactsRef.current.length !== 1 ? 's' : ''} remembered
+        </p>
       )}
 
-      {/* Image display overlay */}
-      <ImageDisplay
-        images={generatedImages}
-        onDismiss={() => setGeneratedImages([])}
+      <ConversationHistory
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        onSelectConversation={(conv) => {
+          setHistoryOpen(false);
+          setDetailConversation(conv);
+        }}
+      />
+
+      <ConversationDetail
+        conversation={detailConversation}
+        onClose={() => setDetailConversation(null)}
       />
     </div>
   );
@@ -336,9 +387,33 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 24,
+    gap: 32,
     padding: 24,
     background: 'linear-gradient(180deg, #0a0a0f 0%, #0f0f1a 100%)',
+    position: 'relative',
+  },
+  topBar: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    right: 16,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  iconButton: {
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: 12,
+    width: 44,
+    height: 44,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 20,
+    cursor: 'pointer',
+    color: 'rgba(255,255,255,0.6)',
   },
   title: {
     fontSize: 28,
@@ -351,13 +426,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  previewRow: {
-    display: 'flex',
-    gap: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
   },
   status: {
     fontSize: 16,
@@ -372,10 +440,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     maxWidth: 400,
     textAlign: 'center' as const,
-  },
-  buttonRow: {
-    display: 'flex',
-    gap: 12,
   },
   button: {
     padding: '14px 36px',
@@ -394,35 +458,10 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(248, 113, 113, 0.1)',
     color: '#f87171',
   },
-  fabRow: {
-    display: 'flex',
-    gap: 12,
-    position: 'fixed' as const,
-    bottom: 32,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    zIndex: 50,
-  },
-  fab: {
-    width: 48,
-    height: 48,
-    borderRadius: '50%',
-    border: '1px solid rgba(255,255,255,0.15)',
-    background: 'rgba(255,255,255,0.08)',
-    color: 'rgba(255,255,255,0.7)',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'all 0.3s ease',
-    padding: 0,
-    backdropFilter: 'blur(10px)',
-  },
-  fabActive: {
-    borderColor: 'rgba(96, 165, 250, 0.5)',
-    background: 'rgba(96, 165, 250, 0.2)',
-    color: '#60a5fa',
-    boxShadow: '0 0 20px rgba(96, 165, 250, 0.3)',
+  memoryHint: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.25)',
+    letterSpacing: 0.5,
   },
 };
 
