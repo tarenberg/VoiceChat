@@ -477,10 +477,7 @@ const App: React.FC = () => {
   const isActive = orbState !== 'idle';
 
   return (
-    <div style={{minHeight:'100vh',background:'#0a0a0f',color:'#fff',padding:20}} onClick={handlePageClick}>
-      <h1 style={{color:'#8B5CF6',fontSize:28,textAlign:'center',marginTop:40}}>🧁 Muffin Voice</h1>
-      <p style={{color:'#aaa',textAlign:'center',marginTop:10}}>If you can see this, the app is working!</p>
-      <hr style={{borderColor:'#333',margin:'20px 0'}} />
+    <div style={styles.page} onClick={handlePageClick}>
       {/* ===== TOP BAR ===== */}
       <div style={styles.topBar}>
         <div style={styles.topBarLeft}>
@@ -819,11 +816,13 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 10,
-    padding: '10px 16px max(20px, env(safe-area-inset-bottom))',
-    background: 'linear-gradient(0deg, rgba(10,10,15,0.98) 60%, transparent 100%)',
+    gap: 8,
+    padding: '8px 0 max(16px, env(safe-area-inset-bottom))',
+    background: 'linear-gradient(0deg, rgba(10,10,15,0.98) 70%, transparent 100%)',
     pointerEvents: 'none',
     zIndex: 40,
+    maxHeight: '45vh',
+    overflowY: 'auto',
   },
   fabRow: {
     display: 'flex',
@@ -851,12 +850,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   buttonRow: {
     display: 'flex',
-    gap: 12,
+    gap: 10,
     pointerEvents: 'auto',
+    paddingBottom: 4,
   },
   personaBtn: {
-    padding: '12px 20px',
-    fontSize: 14,
+    padding: '10px 16px',
+    fontSize: 13,
     fontWeight: 500,
     border: '1px solid rgba(255,255,255,0.12)',
     borderRadius: 50,
@@ -866,8 +866,8 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: 0.5,
   },
   button: {
-    padding: '14px 36px',
-    fontSize: 16,
+    padding: '12px 28px',
+    fontSize: 15,
     fontWeight: 500,
     border: '1px solid rgba(255,255,255,0.15)',
     borderRadius: 50,
