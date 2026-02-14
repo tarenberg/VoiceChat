@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" rx="200" fill="#0a0a0f"/>
+  <!-- Muffin body -->
+  <ellipse cx="512" cy="620" rx="220" ry="160" fill="#8B6914"/>
+  <!-- Muffin top -->
+  <ellipse cx="512" cy="480" rx="260" ry="180" fill="#D4A030"/>
+  <!-- Muffin wrapper lines -->
+  <path d="M292 620 Q400 580 512 620 Q624 580 732 620" fill="none" stroke="#6B4E0A" stroke-width="4"/>
+  <path d="M292 660 Q400 620 512 660 Q624 620 732 660" fill="none" stroke="#6B4E0A" stroke-width="4"/>
+  <!-- Frosting swirl -->
+  <ellipse cx="512" cy="400" rx="200" ry="100" fill="#F5E6CC"/>
+  <ellipse cx="512" cy="370" rx="150" ry="70" fill="#FFD700"/>
+  <!-- Audio waves left -->
+  <path d="M140 480 Q120 420 140 360" fill="none" stroke="#FFD700" stroke-width="16" stroke-linecap="round" opacity="0.8"/>
+  <path d="M100 520 Q70 420 100 320" fill="none" stroke="#FFD700" stroke-width="16" stroke-linecap="round" opacity="0.5"/>
+  <!-- Audio waves right -->
+  <path d="M884 480 Q904 420 884 360" fill="none" stroke="#FFD700" stroke-width="16" stroke-linecap="round" opacity="0.8"/>
+  <path d="M924 520 Q954 420 924 320" fill="none" stroke="#FFD700" stroke-width="16" stroke-linecap="round" opacity="0.5"/>
+  <!-- Eyes -->
+  <circle cx="450" cy="420" r="20" fill="#0a0a0f"/>
+  <circle cx="574" cy="420" r="20" fill="#0a0a0f"/>
+  <!-- Smile -->
+  <path d="M460 460 Q512 500 564 460" fill="none" stroke="#0a0a0f" stroke-width="8" stroke-linecap="round"/>
+</svg>
