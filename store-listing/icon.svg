@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a1030"/>
+      <stop offset="100%" stop-color="#0a0a0f"/>
+    </linearGradient>
+    <linearGradient id="frosting" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff9eb8"/>
+      <stop offset="100%" stop-color="#e8708a"/>
+    </linearGradient>
+    <linearGradient id="base" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8B5E3C"/>
+      <stop offset="100%" stop-color="#6B3F1F"/>
+    </linearGradient>
+    <linearGradient id="wrapper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d4a574"/>
+      <stop offset="100%" stop-color="#b8864e"/>
+    </linearGradient>
+    <clipPath id="roundRect">
+      <rect x="20" y="20" width="472" height="472" rx="100" ry="100"/>
+    </clipPath>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect x="20" y="20" width="472" height="472" rx="100" ry="100" fill="url(#bg)"/>
+
+  <!-- Subtle radial glow behind muffin -->
+  <circle cx="256" cy="270" r="140" fill="#6c3aad" opacity="0.15"/>
+
+  <!-- Sound waves - left side -->
+  <path d="M105,240 Q85,270 105,300" fill="none" stroke="#b388ff" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M80,220 Q50,270 80,320" fill="none" stroke="#b388ff" stroke-width="4.5" stroke-linecap="round" opacity="0.5"/>
+  <path d="M58,200 Q18,270 58,340" fill="none" stroke="#b388ff" stroke-width="4" stroke-linecap="round" opacity="0.3"/>
+
+  <!-- Sound waves - right side -->
+  <path d="M407,240 Q427,270 407,300" fill="none" stroke="#b388ff" stroke-width="5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M432,220 Q462,270 432,320" fill="none" stroke="#b388ff" stroke-width="4.5" stroke-linecap="round" opacity="0.5"/>
+  <path d="M454,200 Q494,270 454,340" fill="none" stroke="#b388ff" stroke-width="4" stroke-linecap="round" opacity="0.3"/>
+
+  <!-- Muffin wrapper (trapezoid) -->
+  <path d="M185,310 L195,390 Q256,400 317,390 L327,310 Z" fill="url(#wrapper)"/>
+  <!-- Wrapper ridges -->
+  <path d="M190,320 L196,385" fill="none" stroke="#c4945a" stroke-width="1.5" opacity="0.5"/>
+  <path d="M210,315 L213,392" fill="none" stroke="#c4945a" stroke-width="1.5" opacity="0.5"/>
+  <path d="M230,312 L231,395" fill="none" stroke="#c4945a" stroke-width="1.5" opacity="0.5"/>
+  <path d="M250,311 L250,397" fill="none" stroke="#c4945a" stroke-width="1.5" opacity="0.5"/>
+  <path d="M270,311 L270,397" fill="none" stroke="#c4945a" stroke-width="1.5" opacity="0.5"/>
+  <path d="M290,312 L291,395" fill="none" stroke="#c4945a" stroke-width="1.5" opacity="0.5"/>
+  <path d="M310,315 L309,392" fill="none" stroke="#c4945a" stroke-width="1.5" opacity="0.5"/>
+
+  <!-- Muffin top / cake body -->
+  <ellipse cx="256" cy="310" rx="85" ry="28" fill="url(#base)"/>
+  <path d="M171,310 Q170,240 200,210 Q230,185 256,180 Q282,185 312,210 Q342,240 341,310 Z" fill="url(#base)"/>
+
+  <!-- Frosting -->
+  <path d="M165,310 Q165,275 185,255 Q200,240 220,248 Q235,230 256,225 Q277,230 292,248 Q312,240 327,255 Q347,275 347,310 Z" fill="url(#frosting)"/>
+  <!-- Frosting swirl highlight -->
+  <path d="M200,280 Q220,260 256,255 Q292,260 312,280" fill="none" stroke="#ffb8cc" stroke-width="3" opacity="0.5"/>
+
+  <!-- Cherry on top -->
+  <circle cx="256" cy="220" r="18" fill="#ff4466"/>
+  <circle cx="250" cy="214" r="5" fill="#ff8899" opacity="0.7"/>
+  <!-- Cherry stem -->
+  <path d="M256,202 Q262,188 270,185" fill="none" stroke="#4a8c3f" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Cute face - eyes -->
+  <ellipse cx="232" cy="280" rx="8" ry="9" fill="#2a1520"/>
+  <ellipse cx="280" cy="280" rx="8" ry="9" fill="#2a1520"/>
+  <!-- Eye highlights -->
+  <circle cx="235" cy="276" r="3" fill="white" opacity="0.8"/>
+  <circle cx="283" cy="276" r="3" fill="white" opacity="0.8"/>
+  <!-- Cute smile -->
+  <path d="M242,296 Q256,310 270,296" fill="none" stroke="#2a1520" stroke-width="3" stroke-linecap="round"/>
+  <!-- Blush -->
+  <ellipse cx="220" cy="293" rx="12" ry="7" fill="#ff6688" opacity="0.3"/>
+  <ellipse cx="292" cy="293" rx="12" ry="7" fill="#ff6688" opacity="0.3"/>
+</svg>

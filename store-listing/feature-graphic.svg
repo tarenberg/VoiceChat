@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 500" width="1024" height="500">
+  <defs>
+    <linearGradient id="fbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1030"/>
+      <stop offset="50%" stop-color="#0f0a1a"/>
+      <stop offset="100%" stop-color="#0a0a0f"/>
+    </linearGradient>
+    <linearGradient id="ff" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff9eb8"/>
+      <stop offset="100%" stop-color="#e8708a"/>
+    </linearGradient>
+    <linearGradient id="fb" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8B5E3C"/>
+      <stop offset="100%" stop-color="#6B3F1F"/>
+    </linearGradient>
+    <linearGradient id="fw" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#d4a574"/>
+      <stop offset="100%" stop-color="#b8864e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1024" height="500" fill="url(#fbg)"/>
+
+  <!-- Decorative wave lines across background -->
+  <path d="M0,350 Q150,320 300,350 Q450,380 600,350 Q750,320 900,350 Q975,365 1024,350" fill="none" stroke="#b388ff" stroke-width="1.5" opacity="0.1"/>
+  <path d="M0,370 Q150,340 300,370 Q450,400 600,370 Q750,340 900,370 Q975,385 1024,370" fill="none" stroke="#b388ff" stroke-width="1.5" opacity="0.08"/>
+  <path d="M0,150 Q150,120 300,150 Q450,180 600,150 Q750,120 900,150 Q975,165 1024,150" fill="none" stroke="#b388ff" stroke-width="1.5" opacity="0.1"/>
+
+  <!-- Subtle glow behind muffin -->
+  <circle cx="220" cy="260" r="100" fill="#6c3aad" opacity="0.12"/>
+
+  <!-- Mini muffin icon -->
+  <g transform="translate(220,260) scale(0.55)">
+    <!-- Sound waves left -->
+    <path d="M-120,-30 Q-140,0 -120,30" fill="none" stroke="#b388ff" stroke-width="5" stroke-linecap="round" opacity="0.6"/>
+    <path d="M-145,-55 Q-175,0 -145,55" fill="none" stroke="#b388ff" stroke-width="4" stroke-linecap="round" opacity="0.35"/>
+    <!-- Sound waves right -->
+    <path d="M120,-30 Q140,0 120,30" fill="none" stroke="#b388ff" stroke-width="5" stroke-linecap="round" opacity="0.6"/>
+    <path d="M145,-55 Q175,0 145,55" fill="none" stroke="#b388ff" stroke-width="4" stroke-linecap="round" opacity="0.35"/>
+    <!-- Wrapper -->
+    <path d="M-55,40 L-48,100 Q0,110 48,100 L55,40 Z" fill="url(#fw)"/>
+    <!-- Muffin body -->
+    <ellipse cx="0" cy="40" rx="68" ry="22" fill="url(#fb)"/>
+    <path d="M-68,40 Q-70,-20 -42,-45 Q-22,-65 0,-70 Q22,-65 42,-45 Q70,-20 68,40 Z" fill="url(#fb)"/>
+    <!-- Frosting -->
+    <path d="M-72,40 Q-72,10 -55,-10 Q-42,-22 -28,-15 Q-15,-30 0,-33 Q15,-30 28,-15 Q42,-22 55,-10 Q72,10 72,40 Z" fill="url(#ff)"/>
+    <!-- Cherry -->
+    <circle cx="0" cy="-38" r="14" fill="#ff4466"/>
+    <circle cx="-4" cy="-43" r="4" fill="#ff8899" opacity="0.7"/>
+    <path d="M0,-52 Q5,-62 12,-65" fill="none" stroke="#4a8c3f" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Eyes -->
+    <ellipse cx="-18" cy="10" rx="6" ry="7" fill="#2a1520"/>
+    <ellipse cx="18" cy="10" rx="6" ry="7" fill="#2a1520"/>
+    <circle cx="-16" cy="7" r="2.5" fill="white" opacity="0.8"/>
+    <circle cx="20" cy="7" r="2.5" fill="white" opacity="0.8"/>
+    <!-- Smile -->
+    <path d="M-10,24 Q0,35 10,24" fill="none" stroke="#2a1520" stroke-width="2.5" stroke-linecap="round"/>
+    <!-- Blush -->
+    <ellipse cx="-28" cy="20" rx="9" ry="5" fill="#ff6688" opacity="0.3"/>
+    <ellipse cx="28" cy="20" rx="9" ry="5" fill="#ff6688" opacity="0.3"/>
+  </g>
+
+  <!-- Title text -->
+  <text x="420" y="225" font-family="Georgia, 'Times New Roman', serif" font-size="72" font-weight="bold" fill="#ffffff" letter-spacing="2">Muffin Voice</text>
+
+  <!-- Tagline -->
+  <text x="420" y="290" font-family="Georgia, 'Times New Roman', serif" font-size="28" fill="#b388ff" font-style="italic" opacity="0.85">Talk naturally with AI</text>
+
+  <!-- Decorative sound wave lines near text -->
+  <path d="M420,320 Q520,310 620,320 Q720,330 820,320" fill="none" stroke="#b388ff" stroke-width="2" opacity="0.2"/>
+  <path d="M450,340 Q550,330 650,340 Q750,350 820,340" fill="none" stroke="#b388ff" stroke-width="1.5" opacity="0.12"/>
+</svg>
