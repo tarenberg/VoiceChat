@@ -1,0 +1,12 @@
+🎉 Welcome to Muffin Voice v1.0!
+
+• Full-duplex voice conversations — talk and listen simultaneously
+• 8 unique AI personas: Muffin, Art Mentor, Storyteller, Wellness Guide, Language Tutor, Interview Coach, Brainstorm Buddy, and Music Companion
+• 6 conversation modes: Language Practice, Interview Prep, Brainstorming, Meditation & Wellness, Storytelling, and Art Critique
+• 📷 Camera integration — show things to your AI and talk about them
+• 🔊 Ambient sounds — rain, café, fireplace, and more for the perfect vibe
+• 💾 Conversation memory — your AI remembers details across sessions
+• 📊 Usage tracking with free daily minutes
+• 🎨 Beautiful animated voice orb with real-time audio visualization
+• Create and share custom personas
+• Conversation history with bookmarks and search
