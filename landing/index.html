@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Muffin Voice — Talk Naturally with AI</title>
+<meta name="description" content="Muffin Voice is a voice-first AI companion with 8 unique personas, memory, ambient sounds, and a beautiful dark UI. Free to start.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0a0a0f;
+  --surface: #12121a;
+  --surface2: #1a1a26;
+  --text: #eeeef0;
+  --text-dim: #8888a0;
+  --accent: #a855f7;
+  --accent2: #ec4899;
+  --gradient: linear-gradient(135deg, #a855f7, #ec4899);
+  --radius: 16px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; text-decoration: none; }
+
+.container { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+/* --- NAV --- */
+nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(10,10,15,.8);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+nav .container {
+  display: flex; align-items: center; justify-content: space-between;
+  height: 64px;
+}
+.nav-logo { font-weight: 700; font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
+.nav-logo span { font-size: 1.4rem; }
+.nav-links { display: flex; gap: 32px; font-size: .875rem; color: var(--text-dim); }
+.nav-links a:hover { color: var(--text); }
+@media (max-width: 640px) { .nav-links { display: none; } }
+
+/* --- BUTTONS --- */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 14px 32px; border-radius: 50px; font-weight: 600;
+  font-size: .95rem; border: none; cursor: pointer;
+  transition: transform .2s, box-shadow .2s;
+}
+.btn:hover { transform: translateY(-2px); }
+.btn-primary {
+  background: var(--gradient); color: #fff;
+  box-shadow: 0 4px 24px rgba(168,85,247,.3);
+}
+.btn-primary:hover { box-shadow: 0 8px 32px rgba(168,85,247,.45); }
+.btn-outline {
+  background: transparent; color: var(--text);
+  border: 1px solid rgba(255,255,255,.15);
+}
+.btn-outline:hover { border-color: rgba(255,255,255,.3); }
+
+/* --- HERO --- */
+.hero {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  text-align: center; position: relative; padding: 120px 24px 80px;
+}
+.hero-content { position: relative; z-index: 2; max-width: 680px; }
+.hero h1 {
+  font-size: clamp(2.8rem, 7vw, 5rem); font-weight: 800;
+  letter-spacing: -.03em; line-height: 1.1; margin-bottom: 20px;
+}
+.hero h1 .gradient-text {
+  background: var(--gradient); -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent; background-clip: text;
+}
+.hero p { font-size: 1.2rem; color: var(--text-dim); margin-bottom: 40px; max-width: 480px; margin-inline: auto; }
+.hero-buttons { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+
+/* Orb */
+.orb-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.orb {
+  width: 420px; height: 420px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(168,85,247,.25), rgba(236,72,153,.15), transparent 70%);
+  filter: blur(60px);
+  animation: orbPulse 6s ease-in-out infinite;
+}
+@keyframes orbPulse {
+  0%, 100% { transform: scale(1); opacity: .6; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+/* Badge */
+.badge {
+  display: inline-block; padding: 6px 16px; border-radius: 50px;
+  background: rgba(168,85,247,.12); border: 1px solid rgba(168,85,247,.25);
+  font-size: .8rem; font-weight: 500; color: var(--accent);
+  margin-bottom: 24px; letter-spacing: .02em;
+}
+
+/* --- SECTION COMMON --- */
+section { padding: 100px 0; }
+.section-label {
+  font-size: .75rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .12em; color: var(--accent); margin-bottom: 12px;
+}
+.section-title {
+  font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 700;
+  letter-spacing: -.02em; margin-bottom: 16px;
+}
+.section-desc { color: var(--text-dim); max-width: 560px; font-size: 1.05rem; }
+.section-header { text-align: center; margin-bottom: 64px; }
+.section-header .section-desc { margin-inline: auto; }
+
+/* --- FEATURES --- */
+.features-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px;
+}
+@media (max-width: 900px) { .features-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 500px) { .features-grid { grid-template-columns: 1fr; } }
+.feature-card {
+  background: var(--surface); border: 1px solid rgba(255,255,255,.06);
+  border-radius: var(--radius); padding: 28px 24px;
+  transition: transform .3s, border-color .3s;
+}
+.feature-card:hover { transform: translateY(-4px); border-color: rgba(168,85,247,.25); }
+.feature-icon { font-size: 2rem; margin-bottom: 14px; display: block; }
+.feature-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+.feature-card p { font-size: .85rem; color: var(--text-dim); line-height: 1.5; }
+
+/* --- STORY --- */
+.story-section { background: var(--surface); border-top: 1px solid rgba(255,255,255,.04); border-bottom: 1px solid rgba(255,255,255,.04); }
+.story-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center; }
+@media (max-width: 768px) { .story-grid { grid-template-columns: 1fr; gap: 40px; } }
+.story-image {
+  aspect-ratio: 1; border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(168,85,247,.2), rgba(236,72,153,.2));
+  display: flex; align-items: center; justify-content: center; font-size: 5rem;
+}
+.story-text p { color: var(--text-dim); margin-bottom: 16px; font-size: .95rem; }
+.story-text p:first-of-type { color: var(--text); font-size: 1.05rem; }
+
+/* --- PRICING --- */
+.pricing-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 720px; margin: 0 auto; }
+@media (max-width: 640px) { .pricing-grid { grid-template-columns: 1fr; } }
+.price-card {
+  background: var(--surface); border: 1px solid rgba(255,255,255,.06);
+  border-radius: var(--radius); padding: 36px 32px; position: relative;
+}
+.price-card.featured {
+  border-color: rgba(168,85,247,.4);
+  background: linear-gradient(170deg, rgba(168,85,247,.08), var(--surface) 50%);
+}
+.price-card .tag {
+  position: absolute; top: -12px; right: 24px;
+  background: var(--gradient); color: #fff; font-size: .7rem;
+  font-weight: 600; padding: 4px 14px; border-radius: 50px;
+}
+.price-name { font-size: .85rem; color: var(--text-dim); font-weight: 500; margin-bottom: 8px; }
+.price-amount { font-size: 2.4rem; font-weight: 800; margin-bottom: 4px; }
+.price-period { font-size: .8rem; color: var(--text-dim); margin-bottom: 24px; }
+.price-features { list-style: none; margin-bottom: 32px; }
+.price-features li {
+  padding: 8px 0; font-size: .9rem; color: var(--text-dim);
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  display: flex; align-items: center; gap: 10px;
+}
+.price-features li::before { content: '✓'; color: var(--accent); font-weight: 600; }
+
+/* --- SCREENSHOTS --- */
+.screenshots-scroll {
+  display: flex; gap: 20px; overflow-x: auto; padding: 0 24px 20px;
+  scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+}
+.screenshots-scroll::-webkit-scrollbar { display: none; }
+.screenshot-placeholder {
+  flex: 0 0 260px; aspect-ratio: 9/19.5; border-radius: 24px;
+  background: linear-gradient(160deg, var(--surface2), var(--surface));
+  border: 1px solid rgba(255,255,255,.06);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .8rem; color: var(--text-dim); scroll-snap-align: center;
+  position: relative; overflow: hidden;
+}
+.screenshot-placeholder::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(160deg, rgba(168,85,247,.08), rgba(236,72,153,.05), transparent);
+}
+
+/* --- FOOTER --- */
+footer {
+  border-top: 1px solid rgba(255,255,255,.06);
+  padding: 48px 0 32px; text-align: center;
+}
+.footer-links { display: flex; gap: 24px; justify-content: center; flex-wrap: wrap; margin-bottom: 24px; }
+.footer-links a { font-size: .85rem; color: var(--text-dim); }
+.footer-links a:hover { color: var(--text); }
+.footer-copy { font-size: .8rem; color: var(--text-dim); opacity: .6; }
+
+/* --- ANIMATIONS --- */
+.reveal {
+  opacity: 0; transform: translateY(30px);
+  transition: opacity .7s ease, transform .7s ease;
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="container">
+    <a href="#" class="nav-logo"><span>🧁</span> Muffin Voice</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#story">Story</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#screenshots">Screenshots</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="orb-wrap"><div class="orb"></div></div>
+  <div class="hero-content">
+    <div class="badge">🎙️ Voice-First AI Companion</div>
+    <h1><span class="gradient-text">Muffin Voice</span></h1>
+    <p>Talk naturally with AI. Eight unique personas, real memory, ambient sounds, and a UI that feels like magic.</p>
+    <div class="hero-buttons">
+      <a href="#" class="btn btn-primary">▶ Download on Google Play</a>
+      <a href="#features" class="btn btn-outline">Learn More</a>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-label">Features</div>
+      <h2 class="section-title">Everything you need to talk with AI</h2>
+      <p class="section-desc">Built from the ground up for voice. No typing walls of text — just speak.</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card reveal">
+        <span class="feature-icon">🎙️</span>
+        <h3>Voice-First AI</h3>
+        <p>Speak naturally and hear real-time responses. Conversation, not commands.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">🎭</span>
+        <h3>8 Personas</h3>
+        <p>From a witty comedian to a thoughtful therapist — pick the voice that fits your mood.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">🧠</span>
+        <h3>Memory</h3>
+        <p>Muffin remembers your conversations, preferences, and context across sessions.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">🔀</span>
+        <h3>Modes</h3>
+        <p>Switch between chat, brainstorm, coaching, and more — each tuned for the task.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">📷</span>
+        <h3>Camera</h3>
+        <p>Show Muffin what you see. Snap a photo and get instant visual understanding.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">🎵</span>
+        <h3>Ambient Sounds</h3>
+        <p>Rain, fireplace, café — set the mood while you talk with immersive soundscapes.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">✨</span>
+        <h3>Beautiful UI</h3>
+        <p>A dark, elegant interface designed to disappear and let the conversation shine.</p>
+      </div>
+      <div class="feature-card reveal">
+        <span class="feature-icon">🆓</span>
+        <h3>Free to Start</h3>
+        <p>5 minutes a day, no credit card. Upgrade when you're ready for unlimited access.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STORY -->
+<section id="story" class="story-section">
+  <div class="container">
+    <div class="story-grid">
+      <div class="story-image reveal">🎨</div>
+      <div class="story-text reveal">
+        <div class="section-label">Built by an Artist</div>
+        <h2 class="section-title">From Times Square to AI</h2>
+        <p>Muffin Voice is built by Tom — a fine artist for over 30 years whose work has been displayed in Times Square and galleries around the world.</p>
+        <p>After decades of creating visual art, Tom turned his creative eye toward technology. The result is an AI companion that doesn't just work — it feels crafted. Every interaction, every animation, every sound was designed with the same care you'd put into a painting.</p>
+        <p>Muffin Voice isn't built by a big tech company. It's built by someone who believes technology should be beautiful, personal, and human.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section id="pricing">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-label">Pricing</div>
+      <h2 class="section-title">Simple, honest pricing</h2>
+      <p class="section-desc">Start free. Upgrade when Muffin becomes part of your day.</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="price-card reveal">
+        <div class="price-name">Free</div>
+        <div class="price-amount">$0</div>
+        <div class="price-period">forever</div>
+        <ul class="price-features">
+          <li>5 minutes of voice per day</li>
+          <li>All 8 personas</li>
+          <li>All modes</li>
+          <li>Basic memory</li>
+          <li>Ambient sounds</li>
+        </ul>
+        <a href="#" class="btn btn-outline" style="width:100%;justify-content:center;">Get Started</a>
+      </div>
+      <div class="price-card featured reveal">
+        <div class="tag">Most Popular</div>
+        <div class="price-name">Pro</div>
+        <div class="price-amount">$4.99</div>
+        <div class="price-period">per month</div>
+        <ul class="price-features">
+          <li>Unlimited voice time</li>
+          <li>All 8 personas</li>
+          <li>All modes</li>
+          <li>Full memory &amp; context</li>
+          <li>Ambient sounds</li>
+          <li>Camera vision</li>
+          <li>Priority responses</li>
+        </ul>
+        <a href="#" class="btn btn-primary" style="width:100%;justify-content:center;">Upgrade to Pro</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCREENSHOTS -->
+<section id="screenshots">
+  <div class="container">
+    <div class="section-header reveal">
+      <div class="section-label">Screenshots</div>
+      <h2 class="section-title">See it in action</h2>
+    </div>
+  </div>
+  <div class="screenshots-scroll">
+    <div class="screenshot-placeholder">Home</div>
+    <div class="screenshot-placeholder">Conversation</div>
+    <div class="screenshot-placeholder">Personas</div>
+    <div class="screenshot-placeholder">Ambient</div>
+    <div class="screenshot-placeholder">Settings</div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="container">
+    <div class="footer-links">
+      <a href="#">Privacy Policy</a>
+      <a href="#">Terms of Service</a>
+      <a href="#">Support</a>
+      <a href="#">Twitter</a>
+      <a href="#">Contact</a>
+    </div>
+    <p class="footer-copy">© 2026 Muffin Voice. Built with ❤️ by Tom.</p>
+  </div>
+</footer>
+
+<script>
+// Intersection Observer for reveal animations
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); }});
+}, { threshold: 0.15 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
